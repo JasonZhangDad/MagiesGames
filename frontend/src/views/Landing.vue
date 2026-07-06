@@ -11,6 +11,9 @@ const router = useRouter()
 const user = useUserStore()
 const game = useGameStore()
 const nickname = ref('')
+const username = ref('')
+const password = ref('')
+const mode = ref('guest') // guest | login | register
 const busy = ref(false)
 const canvasEl = ref(null)
 let scene3d = null
@@ -26,7 +29,13 @@ async function enter() {
   busy.value = true
   sfx.click()
   try {
-    if (!user.profile) await user.guestLogin(nickname.value)
+    if (mode.value === 'login') {
+      await user.login(username.value, password.value)
+    } else if (mode.value === 'register') {
+      await user.register(username.value, password.value, nickname.value)
+    } else if (!user.profile) {
+      await user.guestLogin(nickname.value)
+    }
     socket.close()
     socket.connect(user.token)
     router.push({ name: 'lobby' })
@@ -40,6 +49,9 @@ async function enter() {
 function switchAccount() {
   user.logout()
   nickname.value = ''
+  username.value = ''
+  password.value = ''
+  mode.value = 'guest'
 }
 </script>
 
@@ -52,24 +64,47 @@ function switchAccount() {
       <p class="slogan">沉浸式 3D 牌桌 · 服务端公正判定 · AI 秒补位</p>
 
       <div class="entry glass">
-        <template v-if="user.profile">
+        <template v-if="user.profile && mode === 'guest'">
           <div class="welcome">
             <span class="avatar">{{ user.profile.avatar }}</span>
             <div>
-              <div class="nick">{{ user.profile.nickname }}</div>
+              <div class="nick">
+                {{ user.profile.nickname }}
+                <span v-if="user.profile.registered" class="regtag">✓ 正式账号</span>
+              </div>
               <div class="coin">💰 {{ user.profile.coin.toLocaleString() }}</div>
             </div>
           </div>
           <button class="btn btn-gold cta" :disabled="busy" @click="enter">进入大厅</button>
-          <button class="btn btn-ghost small" @click="switchAccount">换个昵称</button>
+          <div class="minor">
+            <button v-if="!user.profile.registered" class="btn btn-ghost small" @click="mode = 'register'">绑定正式账号</button>
+            <button class="btn btn-ghost small" @click="switchAccount">切换账号</button>
+          </div>
         </template>
         <template v-else>
-          <input
-            v-model="nickname" class="field" maxlength="12"
-            placeholder="起个响亮的昵称(可留空)" @keyup.enter="enter"
-          />
+          <div class="tabs">
+            <button :class="{ on: mode === 'guest' }" @click="mode = 'guest'">游客</button>
+            <button :class="{ on: mode === 'login' }" @click="mode = 'login'">登录</button>
+            <button :class="{ on: mode === 'register' }" @click="mode = 'register'">注册</button>
+          </div>
+          <template v-if="mode === 'guest'">
+            <input v-model="nickname" class="field" maxlength="12"
+                   placeholder="起个响亮的昵称(可留空)" @keyup.enter="enter" />
+          </template>
+          <template v-else>
+            <input v-model="username" class="field" maxlength="20" autocomplete="username"
+                   placeholder="用户名(3-20 位字母数字)" @keyup.enter="enter" />
+            <input v-model="password" class="field" type="password" maxlength="64"
+                   :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+                   placeholder="密码(至少 6 位)" @keyup.enter="enter" />
+            <input v-if="mode === 'register'" v-model="nickname" class="field" maxlength="12"
+                   placeholder="昵称(可留空)" @keyup.enter="enter" />
+            <p v-if="mode === 'register' && user.profile && !user.profile.registered" class="hint">
+              将升级当前游客「{{ user.profile.nickname }}」,金币战绩全保留
+            </p>
+          </template>
           <button class="btn btn-gold cta" :disabled="busy" @click="enter">
-            {{ busy ? '进入中…' : '⚡ 游客秒进,立即开局' }}
+            {{ busy ? '处理中…' : mode === 'login' ? '🔑 登录进入' : mode === 'register' ? '📝 注册进入' : '⚡ 游客秒进,立即开局' }}
           </button>
         </template>
       </div>
@@ -107,6 +142,16 @@ function switchAccount() {
   display: flex; flex-direction: column; gap: 12px;
 }
 .cta { font-size: 17px; padding: 15px 22px; animation: pulse-glow 2.4s ease-in-out infinite; }
+.tabs { display: flex; gap: 6px; background: rgba(10, 16, 34, 0.5); border-radius: 12px; padding: 4px; }
+.tabs button {
+  flex: 1; border: none; background: transparent; color: var(--text-1);
+  font: inherit; font-size: 14px; font-weight: 600; padding: 8px 0;
+  border-radius: 9px; cursor: pointer; transition: all 0.15s;
+}
+.tabs button.on { background: rgba(53, 224, 255, 0.14); color: var(--text-0); }
+.hint { color: var(--gold); font-size: 12.5px; text-align: left; }
+.minor { display: flex; gap: 8px; justify-content: center; }
+.regtag { color: var(--green); font-size: 11px; margin-left: 6px; }
 .small { padding: 6px 12px; font-size: 13px; color: var(--text-1); }
 .welcome { display: flex; align-items: center; gap: 12px; text-align: left; }
 .avatar { font-size: 40px; }

@@ -15,6 +15,10 @@ async function req(path, opts = {}) {
 
 export const api = {
   guest: (nickname) => req('/api/auth/guest', { method: 'POST', body: JSON.stringify({ nickname }) }),
+  register: (username, password, nickname) =>
+    req('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password, nickname }) }),
+  login: (username, password) =>
+    req('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   me: () => req('/api/me'),
   rooms: () => req('/api/rooms'),
   leaderboard: () => req('/api/leaderboard'),

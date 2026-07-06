@@ -50,6 +50,14 @@ CREATE INDEX IF NOT EXISTS idx_player_user ON game_player(user_id);
 """
 with _lock:
     _conn.executescript(SCHEMA)
+    for ddl in ("ALTER TABLE user_account ADD COLUMN username TEXT",
+                "ALTER TABLE user_account ADD COLUMN password_hash TEXT"):
+        try:
+            _conn.execute(ddl)
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+    _conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_account_username "
+                  "ON user_account(username) WHERE username IS NOT NULL")
     _conn.commit()
 
 
@@ -69,10 +77,27 @@ def create_guest(nickname: str, avatar: str) -> dict:
 
 
 def get_user(uid: int) -> dict | None:
-    row = _exec("""SELECT a.id, a.nickname, a.avatar, w.coin, w.rank_point, w.wins, w.losses
+    row = _exec("""SELECT a.id, a.nickname, a.avatar, a.username IS NOT NULL AS registered,
+                   w.coin, w.rank_point, w.wins, w.losses
                    FROM user_account a JOIN user_wallet w ON w.user_id = a.id
                    WHERE a.id = ?""", (uid,)).fetchone()
     return dict(row) if row else None
+
+
+def get_credentials(username: str) -> dict | None:
+    row = _exec("SELECT id, password_hash FROM user_account WHERE username = ?",
+                (username,)).fetchone()
+    return dict(row) if row else None
+
+
+def username_taken(username: str) -> bool:
+    return _exec("SELECT 1 FROM user_account WHERE username = ?", (username,)).fetchone() is not None
+
+
+def attach_credentials(uid: int, username: str, password_hash: str, nickname: str | None):
+    _exec("UPDATE user_account SET username = ?, password_hash = ?, is_guest = 0, "
+          "nickname = COALESCE(?, nickname) WHERE id = ?",
+          (username, password_hash, nickname, uid))
 
 
 def record_match(room_code: str, started_at: float, result: dict,

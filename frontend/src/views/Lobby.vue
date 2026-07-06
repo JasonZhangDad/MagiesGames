@@ -1,9 +1,13 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { sfx } from '../sounds'
 import { useGameStore } from '../stores/game'
 import { useUserStore } from '../stores/user'
+import { socket } from '../ws'
+
+const router = useRouter()
 
 const user = useUserStore()
 const game = useGameStore()
@@ -37,6 +41,11 @@ function joinByCode() {
   game.join(code)
 }
 function joinRoom(code) { sfx.click(); game.join(code) }
+function logout() {
+  socket.close()
+  user.logout()
+  router.push({ name: 'landing' })
+}
 
 const comingSoon = [
   { icon: '⚫', name: '五子棋', tag: 'V1.5' },
@@ -53,13 +62,18 @@ const phaseLabel = { waiting: '等待中', calling: '叫分中', playing: '对�
       <div v-if="user.profile" class="me glass">
         <span class="avatar">{{ user.profile.avatar }}</span>
         <div class="meinfo">
-          <div class="nick">{{ user.profile.nickname }}</div>
+          <div class="nick">
+            {{ user.profile.nickname }}
+            <span v-if="user.profile.registered" class="regtag" title="正式账号">✓</span>
+            <span v-else class="guesttag">游客</span>
+          </div>
           <div class="stats">
             <span class="gold">💰{{ user.profile.coin.toLocaleString() }}</span>
             <span>🏆{{ user.profile.rank_point }}</span>
             <span>{{ user.profile.wins }}胜{{ user.profile.losses }}负</span>
           </div>
         </div>
+        <button class="logout" title="退出登录" @click="logout">⎋</button>
       </div>
     </header>
 
@@ -143,6 +157,16 @@ const phaseLabel = { waiting: '等待中', calling: '叫分中', playing: '对�
 .me { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px; }
 .me .avatar { font-size: 26px; }
 .nick { font-weight: 700; font-size: 14px; }
+.regtag { color: var(--green); font-size: 12px; }
+.guesttag {
+  color: var(--text-1); font-size: 10.5px; border: 1px solid var(--line);
+  border-radius: 999px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px;
+}
+.logout {
+  border: none; background: transparent; color: var(--text-1); cursor: pointer;
+  font-size: 17px; padding: 4px 6px; border-radius: 8px;
+}
+.logout:hover { color: var(--red); background: rgba(255, 92, 108, 0.1); }
 .stats { display: flex; gap: 10px; font-size: 12px; color: var(--text-1); margin-top: 2px; }
 .stats .gold { color: var(--gold); }
 

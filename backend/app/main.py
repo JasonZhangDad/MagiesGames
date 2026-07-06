@@ -16,6 +16,17 @@ class GuestIn(BaseModel):
     nickname: str | None = None
 
 
+class RegisterIn(BaseModel):
+    username: str
+    password: str
+    nickname: str | None = None
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
 def _uid_of(authorization: str | None) -> int:
     token = (authorization or "").removeprefix("Bearer ").strip()
     uid = auth.verify_token(token)
@@ -30,6 +41,24 @@ def guest_login(body: GuestIn):
         return auth.guest_login(body.nickname)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@app.post("/api/auth/register")
+def register(body: RegisterIn, authorization: str | None = Header(default=None)):
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    upgrade_uid = auth.verify_token(token) if token else None
+    try:
+        return auth.register(body.username, body.password, body.nickname, upgrade_uid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/auth/login")
+def login(body: LoginIn):
+    try:
+        return auth.login(body.username, body.password)
+    except PermissionError as e:
+        raise HTTPException(401, str(e))
 
 
 @app.get("/api/me")

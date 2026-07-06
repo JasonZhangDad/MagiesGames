@@ -8,7 +8,15 @@ export const useUserStore = defineStore('user', {
   }),
   actions: {
     async guestLogin(nickname) {
-      const { token, user } = await api.guest(nickname)
+      this._apply(await api.guest(nickname))
+    },
+    async register(username, password, nickname) {
+      this._apply(await api.register(username, password, nickname))
+    },
+    async login(username, password) {
+      this._apply(await api.login(username, password))
+    },
+    _apply({ token, user }) {
       setToken(token)
       this.token = token
       this.profile = user
