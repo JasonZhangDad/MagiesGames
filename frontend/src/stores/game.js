@@ -41,8 +41,8 @@ export const useGameStore = defineStore('game', {
       setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id) }, 2600)
     },
     send(msg) { socket.send(msg) },
-    quick() { this.send({ t: 'QUICK' }) },
-    create(priv) { this.send({ t: 'CREATE', private: priv }) },
+    quick(game = 'ddz') { this.send({ t: 'QUICK', game }) },
+    create(priv, game = 'ddz') { this.send({ t: 'CREATE', private: priv, game }) },
     join(code) { this.send({ t: 'JOIN', code }) },
     leave() { this.send({ t: 'LEAVE' }); this.selected = [] },
     ready(v = true) { this.send({ t: 'READY', ready: v }) },
@@ -57,5 +57,12 @@ export const useGameStore = defineStore('game', {
       if (i >= 0) this.selected.splice(i, 1)
       else this.selected.push(card)
     },
+    // ---- 麻将 ----
+    lack(suit) { this.send({ t: 'LACK', suit }) },
+    discardTile(tile) { this.send({ t: 'DISCARD', tile }); this.selected = [] },
+    mjClaim(action) { this.send({ t: 'MJCLAIM', action }) },
+    angang(kind) { this.send({ t: 'ANGANG', kind }) },
+    bugang(kind) { this.send({ t: 'BUGANG', kind }) },
+    huSelf() { this.send({ t: 'HU' }) },
   },
 })
