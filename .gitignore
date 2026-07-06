@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# 数据与密钥
+backend/data/
+*.db
+*.key
+*.pem
+.env
+.env.*
+
+# OS / IDE
+.DS_Store
+.idea/
