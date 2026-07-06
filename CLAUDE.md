@@ -28,7 +28,8 @@ ssh -i ~/Downloads/ssh-key-2026-03-27.key ubuntu@150.230.47.207 \
 
 ## 代码地图
 
-- `backend/app/game/`:规则引擎纯逻辑(cards/patterns/engine/ai),**不依赖网络与数据库**
+- `backend/app/game/`:斗地主规则引擎纯逻辑(cards/patterns/engine/ai),**不依赖网络与数据库**
+- `backend/app/game/mahjong/`:四川血战麻将引擎(tiles/win/engine/ai),同样纯逻辑;Room 按 game_type("ddz" 3 座/"mahjong" 4 座)分支驱动
 - `backend/app/rooms.py`:房间编排(AI 补位/回合计时/托管/重连);并发靠单事件循环 + version 版本号,过期任务自动失效
 - `backend/app/ws.py`:WS 网关,协议 = 个性化 STATE 快照 + EVENT 事件流;客户端以快照为唯一真相,事件只做动画
 - `frontend/src/three/tableScene.js`:3D 对局桌;手牌是公告板(面向相机)且关闭深度测试靠 renderOrder 排序(扇形弧线会让深度关系反转)
