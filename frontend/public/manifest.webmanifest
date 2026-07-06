@@ -1,0 +1,17 @@
+{
+  "name": "Magies 3D 棋牌竞技大厅",
+  "short_name": "Magies棋牌",
+  "description": "浏览器里的 3D 斗地主竞技大厅:AI 补位、段位积分、断线重连。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
