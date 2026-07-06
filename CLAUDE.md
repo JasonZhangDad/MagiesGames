@@ -2,11 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目现状（重要）
+## 项目现状
 
-本目录是**尚未启动编码的新项目**，当前只有产品规划文档 `Magies-3D-Qipai-Platform-Plan.docx`（2026-07-06，V1.0）。没有代码、没有构建命令、没有测试——骨架搭好后请更新本文件的命令部分。
+斗地主 MVP **已上线**:https://games.magies.top（服务器 150.230.47.207,nginx + systemd `magies-games`,代码在 `/opt/magies-games`,静态在 `/var/www/games.magies.top`）。GitHub:https://github.com/JasonZhangDad/MagiesGames。规划文档在 `docs/`。
 
-**Git 注意**：本目录不是独立仓库。git 根在上层 `~/Downloads`（那个仓库跟踪的是 `app/magies-dash`，与本项目无关）。开始写代码前应先在本目录 `git init` 建立独立仓库，避免提交进 Downloads 大仓库。
+## 常用命令
+
+```bash
+# 后端测试(改规则引擎必跑;含 500 局全 AI 仿真)
+cd backend && .venv/bin/python -m pytest tests/ -q
+# 单个测试
+cd backend && .venv/bin/python -m pytest tests/test_patterns.py::test_plane_pure -q
+
+# 本地起服(前端 5173 已代理 /api /ws 到 8000)
+cd backend && .venv/bin/python -m uvicorn app.main:app --port 8000 --reload
+cd frontend && npm run dev
+
+# 构建与部署(先 build,再上传 dist + 服务器 git pull + 重启服务)
+cd frontend && npm run build
+ssh -i ~/Downloads/ssh-key-2026-03-27.key ubuntu@150.230.47.207 \
+  'cd /opt/magies-games && git pull && sudo systemctl restart magies-games'
+```
+
+测试环境变量:`MAGIES_FAST=1`(极短计时器)、`MAGIES_DATA=<dir>`(数据目录)。
+
+## 代码地图
+
+- `backend/app/game/`:规则引擎纯逻辑(cards/patterns/engine/ai),**不依赖网络与数据库**
+- `backend/app/rooms.py`:房间编排(AI 补位/回合计时/托管/重连);并发靠单事件循环 + version 版本号,过期任务自动失效
+- `backend/app/ws.py`:WS 网关,协议 = 个性化 STATE 快照 + EVENT 事件流;客户端以快照为唯一真相,事件只做动画
+- `frontend/src/three/tableScene.js`:3D 对局桌;手牌是公告板(面向相机)且关闭深度测试靠 renderOrder 排序(扇形弧线会让深度关系反转)
+- `frontend/src/stores/game.js`:事件必须放队列逐条消费,Vue watcher 合并会吞事件
 
 ## 项目定位
 
