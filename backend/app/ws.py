@@ -66,10 +66,11 @@ def _handle(uid: int, msg: dict):
         user = db.get_user(uid)
         if not user:
             raise ValueError("账号不存在")
+        game = str(msg.get("game", "ddz"))
         if t == "QUICK":
-            manager.quick_match(user)
+            manager.quick_match(user, game=game)
         elif t == "CREATE":
-            manager.create(user, private=bool(msg.get("private")))
+            manager.create(user, private=bool(msg.get("private")), game=game)
         else:
             code = str(msg.get("code", "")).strip()
             manager.join_code(user, code)
@@ -81,6 +82,11 @@ def _handle(uid: int, msg: dict):
     if room is None:
         raise ValueError("你还没有加入房间")
     seat = room.seat_of(uid)
+    if t in ("CALL", "PLAY", "PASS") and (room.game != "ddz" or room.match is None):
+        raise ValueError("当前没有进行中的斗地主对局")
+    if t in ("LACK", "DISCARD", "MJCLAIM", "ANGANG", "BUGANG", "HU") \
+            and (room.game != "mahjong" or room.match is None):
+        raise ValueError("当前没有进行中的麻将对局")
     if t == "READY":
         room.set_ready(uid, bool(msg.get("ready", True)))
     elif t == "CALL":
@@ -99,6 +105,22 @@ def _handle(uid: int, msg: dict):
         room.set_auto(uid, bool(msg.get("on")))
     elif t == "CHAT":
         room.chat(uid, str(msg.get("text", "")))
+    # ---- 麻将 ----
+    elif t == "LACK":
+        room.do_lack(seat, int(msg.get("suit", 0)))
+    elif t == "DISCARD":
+        room.do_discard(seat, int(msg.get("tile", -1)))
+    elif t == "MJCLAIM":
+        action = str(msg.get("action", "pass"))
+        if action not in ("hu", "peng", "gang", "pass"):
+            raise ValueError("无效响应")
+        room.do_claim(seat, action)
+    elif t == "ANGANG":
+        room.do_angang(seat, int(msg.get("kind", -1)))
+    elif t == "BUGANG":
+        room.do_bugang(seat, int(msg.get("kind", -1)))
+    elif t == "HU":
+        room.do_hu(seat)
 
 
 @router.websocket("/ws")

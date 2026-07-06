@@ -12,7 +12,12 @@ from .game.ai import choose_action, choose_call
 from .game.ai import hint as ai_hint
 from .game.cards import rank_of
 from .game.engine import DdzMatch
+from .game.mahjong import ai as mj_ai
+from .game.mahjong.engine import MahjongMatch
+from .game.mahjong.tiles import kind_label, kind_of
 from .game.patterns import KIND_LABEL
+
+SEATS_OF = {"ddz": 3, "mahjong": 4}
 
 BOT_NAMES = ["AI·星尘", "AI·闪电", "AI·大圣", "AI·夜枭", "AI·白泽", "AI·青鸾", "AI·墨影", "AI·雷酱"]
 BOT_AVATARS = ["🤖", "👾", "🛸", "🎯"]
@@ -33,13 +38,16 @@ class Seat:
 
 
 class Room:
-    def __init__(self, manager: "RoomManager", code: str, owner_id: int, private: bool):
+    def __init__(self, manager: "RoomManager", code: str, owner_id: int, private: bool,
+                 game: str = "ddz"):
         self.manager = manager
         self.code = code
         self.owner_id = owner_id
         self.private = private
-        self.seats: list[Seat | None] = [None, None, None]
-        self.match: DdzMatch | None = None
+        self.game = game
+        self.nseats = SEATS_OF[game]
+        self.seats: list[Seat | None] = [None] * self.nseats
+        self.match: DdzMatch | MahjongMatch | None = None
         self.version = 0
         self.turn_deadline: float | None = None
         self.started_at: float | None = None
@@ -79,7 +87,7 @@ class Room:
             raise ValueError("你已经在这个房间里了")
         if self.phase not in ("waiting", "settled"):
             raise ValueError("对局进行中,不能加入")
-        for i in range(3):
+        for i in range(self.nseats):
             if self.seats[i] is None:
                 self.seats[i] = Seat(user=user)
                 self.event({"e": "join", "seat": i, "nickname": user["nickname"]})
@@ -93,7 +101,7 @@ class Room:
             return
         self.manager.user_room.pop(uid, None)
         s = self.seats[i]
-        if self.match and self.match.phase in ("calling", "playing"):
+        if self.match and self.match.phase != "settled":
             # 对局中离开:席位转为 AI 代打,保住牌局
             s.is_bot = True
             s.user_id = None
@@ -134,7 +142,7 @@ class Room:
         names = [n for n in BOT_NAMES if all(not s or s.nickname != n for s in self.seats)]
         random.shuffle(names)
         filled = False
-        for i in range(3):
+        for i in range(self.nseats):
             if self.seats[i] is None:
                 self.seats[i] = Seat(bot_name=names.pop())
                 self.event({"e": "bot_fill", "seat": i, "nickname": self.seats[i].nickname})
@@ -150,7 +158,10 @@ class Room:
             self.start_match()
 
     def start_match(self):
-        self.match = DdzMatch(first_seat=random.randrange(3))
+        if self.game == "ddz":
+            self.match = DdzMatch(first_seat=random.randrange(3))
+        else:
+            self.match = MahjongMatch(dealer=random.randrange(4))
         self.started_at = time.time()
         self.version += 1
         for s in self.seats:
@@ -165,10 +176,18 @@ class Room:
     # ---------- 回合驱动 ----------
 
     def _arm_turn(self):
-        if not self.match or self.match.phase not in ("calling", "playing"):
+        m = self.match
+        if not m or m.phase in ("settled",) or self.phase == "waiting":
             self.turn_deadline = None
             return
-        limit = config.CALL_TIMEOUT if self.match.phase == "calling" else config.PLAY_TIMEOUT
+        if self.game == "ddz":
+            limit = config.CALL_TIMEOUT if m.phase == "calling" else config.PLAY_TIMEOUT
+        elif m.phase == "dingque":
+            limit = config.LACK_TIMEOUT
+        elif m.claiming:
+            limit = config.CLAIM_TIMEOUT
+        else:
+            limit = config.PLAY_TIMEOUT
         self.turn_deadline = time.time() + limit
         self._spawn(self._turn_timer(self.version, limit))
 
@@ -176,33 +195,72 @@ class Room:
         await asyncio.sleep(delay)
         if self.closed or self.version != version:
             return
-        seat_no = self.match.current
+        m = self.match
+        if self.game == "mahjong":
+            if m.phase == "dingque":
+                for i, s in enumerate(self.seats):
+                    if m.lacks[i] is None:
+                        self._mark_auto(i)
+                        self._act_ai(i)
+                return
+            if m.claiming:
+                for i in list(m.claiming["options"]):
+                    if i not in m.claiming["responses"]:
+                        self._mark_auto(i)
+                        self._act_ai(i)
+                return
+        seat_no = m.current
+        if seat_no is None:
+            return
+        self._mark_auto(seat_no)
+        self._act_ai(seat_no)
+
+    def _mark_auto(self, seat_no: int):
         s = self.seats[seat_no]
         if not s.is_bot and not s.auto:
             s.auto = True  # 超时自动托管
             self.event({"e": "auto", "seat": seat_no, "on": True})
-        self._act_ai(seat_no)
 
     def drive(self):
         """轮到机器人/托管/掉线玩家时,安排 AI 代打。"""
-        if self.closed or not self.match or self.match.phase not in ("calling", "playing"):
+        if self.closed or not self.match or self.match.phase == "settled" \
+                or self.phase == "waiting":
             return
-        seat_no = self.match.current
-        s = self.seats[seat_no]
-        if s.is_bot or s.auto or not s.connected:
-            delay = random.uniform(*config.BOT_DELAY) if s.is_bot else config.AUTO_DELAY
-            self._spawn(self._bot_move(self.version, delay))
+        m = self.match
 
-    async def _bot_move(self, version: int, delay: float):
+        def needs_ai(s: Seat) -> bool:
+            return s.is_bot or s.auto or not s.connected
+
+        pending: list[int] = []
+        if self.game == "mahjong":
+            if m.phase == "dingque":
+                pending = [i for i, s in enumerate(self.seats)
+                           if m.lacks[i] is None and needs_ai(s)]
+            elif m.claiming:
+                pending = [i for i in m.claiming["options"]
+                           if i not in m.claiming["responses"] and needs_ai(self.seats[i])]
+            elif m.current is not None and needs_ai(self.seats[m.current]):
+                pending = [m.current]
+        else:
+            if m.phase in ("calling", "playing") and needs_ai(self.seats[m.current]):
+                pending = [m.current]
+        for seat_no in pending:
+            s = self.seats[seat_no]
+            delay = random.uniform(*config.BOT_DELAY) if s.is_bot else config.AUTO_DELAY
+            self._spawn(self._bot_move(self.version, delay, seat_no))
+
+    async def _bot_move(self, version: int, delay: float, seat_no: int):
         await asyncio.sleep(delay)
         if self.closed or self.version != version:
             return
-        self._act_ai(self.match.current)
+        self._act_ai(seat_no)
 
     def _act_ai(self, seat_no: int):
         m = self.match
         try:
-            if m.phase == "calling":
+            if self.game == "mahjong":
+                self._act_ai_mj(seat_no)
+            elif m.phase == "calling":
                 zeros = sum(1 for c in m.calls if c == 0)
                 must = m.redeal_count >= 1 and zeros == 2
                 self.do_call(seat_no, choose_call(m.hands[seat_no], m.max_call(), must=must))
@@ -214,6 +272,28 @@ class Room:
                     self.do_pass(seat_no)
         except ValueError:
             pass  # 版本竞争兜底:引擎拒绝即放弃本次代打
+
+    def _act_ai_mj(self, seat_no: int):
+        m = self.match
+        if m.phase == "dingque":
+            if m.lacks[seat_no] is None:
+                self.do_lack(seat_no, mj_ai.choose_lack(m.hands[seat_no]))
+            return
+        if m.claiming:
+            if seat_no in m.claiming["options"] and seat_no not in m.claiming["responses"]:
+                self.do_claim(seat_no, mj_ai.choose_claim(m, seat_no))
+            return
+        if m.current != seat_no:
+            return
+        action, arg = mj_ai.choose_self_action(m, seat_no)
+        if action == "hu":
+            self.do_hu(seat_no)
+        elif action == "angang":
+            self.do_angang(seat_no, arg)
+        elif action == "bugang":
+            self.do_bugang(seat_no, arg)
+        else:
+            self.do_discard(seat_no, arg)
 
     # ---------- 三种对局动作(人类与 AI 共用) ----------
 
@@ -258,6 +338,112 @@ class Room:
         self._arm_turn()
         self.broadcast()
         self.drive()
+
+    # ---------- 麻将动作(人类与 AI 共用) ----------
+
+    def _mj_after(self, ev: dict | None = None):
+        self.version += 1
+        if ev:
+            self.event(ev)
+        if self.match.phase == "settled":
+            self._on_settle_mj()
+        else:
+            self._arm_turn()
+        self.broadcast()
+        self.drive()
+
+    def do_lack(self, seat_no: int, suit: int):
+        self.match.set_lack(seat_no, suit)
+        self._mj_after({"e": "lack", "seat": seat_no, "suit": suit})
+
+    def do_discard(self, seat_no: int, tile: int):
+        m = self.match
+        m.discard(seat_no, tile)
+        ev = {"e": "discard", "seat": seat_no, "tile": tile,
+              "label": kind_label(kind_of(tile))}
+        if m.claiming:
+            ev["claim_seats"] = list(m.claiming["options"])
+        self._mj_after(ev)
+
+    def do_claim(self, seat_no: int, action: str):
+        m = self.match
+        before_out = set(m.out)
+        m.claim(seat_no, action)
+        ev = None
+        if m.claiming is None:  # 全员已响应,已裁决
+            new_winners = [w for w in m.winners if w["seat"] not in before_out]
+            if new_winners:
+                ev = {"e": "hu_multi",
+                      "winners": [{k: w[k] for k in ("seat", "fan", "names", "zimo", "from_seat")}
+                                  for w in new_winners]}
+            elif m.history and m.history[-1].get("a") in ("peng", "gang"):
+                h = m.history[-1]
+                ev = {"e": h["a"], "seat": h["seat"], "kind": h["kind"],
+                      "label": kind_label(h["kind"])}
+        self._mj_after(ev)
+
+    def do_angang(self, seat_no: int, kind: int):
+        self.match.angang(seat_no, kind)
+        self._mj_after({"e": "angang", "seat": seat_no, "kind": kind,
+                        "label": kind_label(kind)})
+
+    def do_bugang(self, seat_no: int, kind: int):
+        self.match.bugang(seat_no, kind)
+        self._mj_after({"e": "bugang", "seat": seat_no, "kind": kind,
+                        "label": kind_label(kind)})
+
+    def do_hu(self, seat_no: int):
+        m = self.match
+        m.hu_self(seat_no)
+        w = m.winners[-1]
+        self._mj_after({"e": "hu_multi",
+                        "winners": [{k: w[k] for k in ("seat", "fan", "names", "zimo", "from_seat")}]})
+
+    def _on_settle_mj(self):
+        m = self.match
+        r = m.result
+        self.turn_deadline = None
+        players = []
+        for i, s in enumerate(self.seats):
+            players.append({
+                "user_id": s.user_id, "nickname": s.nickname, "is_bot": s.is_bot,
+                "seat_no": i, "role": "winner" if any(w["seat"] == i for w in m.winners) else "player",
+                "delta_coin": m.deltas[i] * config.COIN_UNIT, "delta_rank": m.deltas[i],
+            })
+        db.record_match(self.code, self.started_at or time.time(), {
+            "base": 1, "multiplier": max((w["fan"] for w in m.winners), default=1),
+            "winner_role": "draw" if r["draw"] else "hu",
+            "spring": False, "bombs": 0,
+        }, players, m.history, game_type="mahjong")
+        for i, s in enumerate(self.seats):
+            if s.is_bot:
+                s.coin = max(0, s.coin + m.deltas[i] * config.COIN_UNIT)
+                s.ready = True
+            else:
+                u = db.get_user(s.user_id)
+                if u:
+                    s.coin = u["coin"]
+                s.ready = False
+                s.auto = False
+        self.event({"e": "mj_settle", "result": self._mj_result()})
+        for i, s in enumerate(self.seats):
+            if s and not s.is_bot and not s.connected:
+                self.seats[i] = None
+        if not self.humans():
+            self._close()
+
+    def _mj_result(self) -> dict:
+        m = self.match
+        r = m.result
+        return {
+            "draw": r["draw"],
+            "winners": [{k: w[k] for k in ("seat", "fan", "names", "zimo", "from_seat", "hand")}
+                        for w in m.winners],
+            "deltas": r["deltas"],
+            "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]],
+            "hands_left": r["hands_left"],
+            "lacks": r["lacks"],
+        }
 
     # ---------- 结算 ----------
 
@@ -305,7 +491,7 @@ class Room:
             return
         s = self.seats[i]
         s.connected = False
-        if self.match and self.match.phase in ("calling", "playing"):
+        if self.match and self.match.phase != "settled":
             self.event({"e": "offline", "seat": i})
             self.broadcast()
             self.drive()  # 掉线玩家的回合交给 AI
@@ -364,6 +550,9 @@ class Room:
         if i is None or not self.match or self.match.phase != "playing" \
                 or self.match.current != i:
             return None
+        if self.game == "mahjong":
+            _, arg = mj_ai.choose_self_action(self.match, i)
+            return [arg] if isinstance(arg, int) else None
         return ai_hint(self.match, i)
 
     def snapshot(self, uid: int | None) -> dict:
@@ -374,37 +563,69 @@ class Room:
             if s is None:
                 seats.append(None)
                 continue
-            seats.append({
+            entry = {
                 "seat": i, "nickname": s.nickname, "avatar": s.avatar, "coin": s.coin,
                 "bot": s.is_bot, "ready": s.ready, "connected": s.connected, "auto": s.auto,
                 "cards_left": len(m.hands[i]) if m else 0,
-                "call": m.calls[i] if m and m.phase == "calling" else None,
-                "role": (m.role_of(i) if m and m.landlord is not None else None),
                 "bubble": s.last_bubble,
-            })
+            }
+            if self.game == "ddz":
+                entry["call"] = m.calls[i] if m and m.phase == "calling" else None
+                entry["role"] = m.role_of(i) if m and m.landlord is not None else None
+            else:
+                entry["lack"] = m.lacks[i] if m else None
+                entry["melds"] = ([{"type": x["type"], "kind": x["kind_id"],
+                                    "label": kind_label(x["kind_id"])}
+                                   for x in m.melds[i]] if m else [])
+                entry["discards"] = m.discards[i] if m else []
+                entry["hu"] = bool(m and i in m.out)
+            seats.append(entry)
         st = {
             "code": self.code, "private": self.private, "phase": self.phase,
-            "owner": self.owner_id, "seats": seats, "my_seat": my_seat,
-            "current": m.current if m and m.phase in ("calling", "playing") else None,
-            "deadline": self.turn_deadline,
-            "base": m.base if m else 0,
-            "bombs": m.bombs if m else 0,
-            "max_call": m.max_call() if m and m.phase == "calling" else 0,
-            "landlord": m.landlord if m else None,
-            "bottom": (m.bottom if m and m.landlord is not None else None),
-            "last": ({"seat": m.last_seat, "cards": m.last_cards,
-                      "kind_label": KIND_LABEL[m.last_pattern.kind]}
-                     if m and m.last_pattern else None),
-            "leading": (m.is_leading() if m and m.phase == "playing" else False),
+            "game": self.game, "owner": self.owner_id, "seats": seats,
+            "my_seat": my_seat, "deadline": self.turn_deadline,
         }
-        if m and my_seat is not None and m.phase in ("calling", "playing", "settled"):
-            st["my_hand"] = sorted(m.hands[my_seat], key=rank_of)
-        if m and m.phase == "settled" and m.result:
-            r = m.result
-            st["result"] = {**{k: r[k] for k in ("winner_seat", "winner_role", "spring",
-                                                 "bombs", "base", "multiplier", "deltas")},
-                            "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]],
-                            "hands_left": r["hands_left"]}
+        if self.game == "ddz":
+            st.update({
+                "current": m.current if m and m.phase in ("calling", "playing") else None,
+                "base": m.base if m else 0,
+                "bombs": m.bombs if m else 0,
+                "max_call": m.max_call() if m and m.phase == "calling" else 0,
+                "landlord": m.landlord if m else None,
+                "bottom": (m.bottom if m and m.landlord is not None else None),
+                "last": ({"seat": m.last_seat, "cards": m.last_cards,
+                          "kind_label": KIND_LABEL[m.last_pattern.kind]}
+                         if m and m.last_pattern else None),
+                "leading": (m.is_leading() if m and m.phase == "playing" else False),
+            })
+            if m and my_seat is not None and m.phase in ("calling", "playing", "settled"):
+                st["my_hand"] = sorted(m.hands[my_seat], key=rank_of)
+            if m and m.phase == "settled" and m.result:
+                r = m.result
+                st["result"] = {**{k: r[k] for k in ("winner_seat", "winner_role", "spring",
+                                                     "bombs", "base", "multiplier", "deltas")},
+                                "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]],
+                                "hands_left": r["hands_left"]}
+        else:
+            st.update({
+                "current": m.current if m and m.phase == "playing" else None,
+                "wall_left": len(m.wall) if m else 0,
+                "deltas": list(m.deltas) if m else [0, 0, 0, 0],
+                "claiming": None,
+            })
+            if m and m.claiming:
+                st["claiming"] = {"from": m.claiming["from"], "tile": m.claiming["tile"],
+                                  "label": kind_label(kind_of(m.claiming["tile"])),
+                                  "waiting": [i for i in m.claiming["options"]
+                                              if i not in m.claiming["responses"]]}
+                if my_seat in m.claiming["options"] and my_seat not in m.claiming["responses"]:
+                    st["my_claim"] = m.claiming["options"][my_seat]
+            if m and my_seat is not None and m.phase in ("dingque", "playing", "settled"):
+                st["my_hand"] = sorted(m.hands[my_seat])
+                st["my_drawn"] = m.drawn if m.current == my_seat else None
+                st["my_options"] = m.self_options(my_seat) if m.phase == "playing" else {}
+            if m and m.phase == "settled" and m.result:
+                st["result"] = self._mj_result()
         return st
 
     def event(self, e: dict):
@@ -415,7 +636,7 @@ class Room:
 
     def summary(self) -> dict:
         return {
-            "code": self.code, "phase": self.phase,
+            "code": self.code, "phase": self.phase, "game": self.game,
             "players": [{"nickname": s.nickname, "avatar": s.avatar, "bot": s.is_bot}
                         for s in self.seats if s],
             "seats_free": sum(1 for s in self.seats if s is None),
@@ -440,9 +661,11 @@ class RoomManager:
         code = self.user_room.get(uid)
         return self.rooms.get(code) if code else None
 
-    def create(self, user: dict, private: bool = False) -> Room:
+    def create(self, user: dict, private: bool = False, game: str = "ddz") -> Room:
+        if game not in SEATS_OF:
+            raise ValueError("未知的游戏类型")
         self._leave_current(user["id"])
-        room = Room(self, self._gen_code(), user["id"], private)
+        room = Room(self, self._gen_code(), user["id"], private, game=game)
         self.rooms[room.code] = room
         room.join(user)
         self.user_room[user["id"]] = room.code
@@ -457,15 +680,15 @@ class RoomManager:
         self.user_room[user["id"]] = room.code
         return room
 
-    def quick_match(self, user: dict) -> Room:
+    def quick_match(self, user: dict, game: str = "ddz") -> Room:
         self._leave_current(user["id"])
         for room in self.rooms.values():
-            if not room.private and room.phase in ("waiting",) \
+            if not room.private and room.game == game and room.phase == "waiting" \
                     and any(s is None for s in room.seats):
                 room.join(user)
                 self.user_room[user["id"]] = room.code
                 return room
-        return self.create(user, private=False)
+        return self.create(user, private=False, game=game)
 
     def _leave_current(self, uid: int):
         room = self.room_of(uid)

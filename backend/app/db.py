@@ -101,13 +101,13 @@ def attach_credentials(uid: int, username: str, password_hash: str, nickname: st
 
 
 def record_match(room_code: str, started_at: float, result: dict,
-                 players: list[dict], history: list[dict]) -> int:
+                 players: list[dict], history: list[dict], game_type: str = "ddz") -> int:
     """players: [{user_id|None, nickname, is_bot, seat_no, role, delta}]"""
     with _lock:
         cur = _conn.execute(
-            """INSERT INTO game_match(room_code, base, multiplier, winner_role, spring, bombs,
-               started_at, ended_at) VALUES(?,?,?,?,?,?,?,?)""",
-            (room_code, result["base"], result["multiplier"], result["winner_role"],
+            """INSERT INTO game_match(room_code, game_type, base, multiplier, winner_role,
+               spring, bombs, started_at, ended_at) VALUES(?,?,?,?,?,?,?,?,?)""",
+            (room_code, game_type, result["base"], result["multiplier"], result["winner_role"],
              int(result["spring"]), result["bombs"], started_at, time.time()))
         mid = cur.lastrowid
         for p in players:

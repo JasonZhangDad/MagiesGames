@@ -21,6 +21,8 @@ FAST = os.environ.get("MAGIES_FAST") == "1"
 
 CALL_TIMEOUT = 0.5 if FAST else 20.0      # 叫分限时
 PLAY_TIMEOUT = 0.5 if FAST else 30.0      # 出牌限时
+LACK_TIMEOUT = 0.5 if FAST else 12.0      # 麻将定缺限时
+CLAIM_TIMEOUT = 0.5 if FAST else 8.0      # 麻将碰杠胡响应限时
 FILL_BOTS_AFTER = 0.15 if FAST else 5.0   # 有人准备后多久 AI 补位
 BOT_DELAY = (0.01, 0.03) if FAST else (0.9, 1.9)   # 机器人思考时间
 AUTO_DELAY = 0.01 if FAST else 0.8        # 托管出牌延迟
