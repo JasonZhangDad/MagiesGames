@@ -33,7 +33,9 @@ export class Net {
     // Upgrade header, leaving the client stuck on "连接中…". Long‑polling connects
     // nearly everywhere and the upgrade happens transparently when allowed.
     // eslint-disable-next-line no-undef
+    const base = location.pathname.startsWith('/arcade/ice-climber/') ? '/arcade/ice-climber' : '';
     this.socket = io({
+      path: base + '/socket.io/',
       transports: ['polling', 'websocket'],
       timeout: 8000,                 // fail a stalled attempt fast instead of hanging
       reconnection: true,
