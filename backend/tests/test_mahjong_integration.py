@@ -20,7 +20,7 @@ def test_mahjong_full_match_via_ws():
         ws.send_json({"t": "READY", "ready": True})
         settled = None
         bots = 0
-        saw_lack = saw_discard = False
+        saw_lack = saw_discard = saw_exchange = False
         for _ in range(20000):
             msg = ws.receive_json()
             if msg["t"] == "STATE" and msg["state"]:
@@ -29,6 +29,9 @@ def test_mahjong_full_match_via_ws():
                 e = msg["e"]
                 if e["e"] == "bot_fill":
                     bots += 1
+                elif e["e"] == "exchange_done":
+                    saw_exchange = True
+                    assert e["dir"] in (1, 2, 3)
                 elif e["e"] == "lack":
                     saw_lack = True
                 elif e["e"] == "discard":
@@ -37,7 +40,7 @@ def test_mahjong_full_match_via_ws():
                     settled = e["result"]
                     break
         assert bots == 3
-        assert saw_lack and saw_discard
+        assert saw_lack and saw_discard and saw_exchange
         assert settled is not None
         assert sum(settled["deltas"]) == 0
         assert isinstance(settled["winners"], list)

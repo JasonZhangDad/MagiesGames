@@ -78,7 +78,7 @@ export class MahjongScene {
     this.handMeshes = new Map()
     this.hand = []
     this.drawnTile = null
-    this.selected = null
+    this.selected = new Set()
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2()
     canvas.addEventListener('pointerdown', (e) => this._onTap(e))
@@ -156,7 +156,9 @@ export class MahjongScene {
   setMyHand(tiles, drawn, selected) {
     this.hand = [...tiles]
     this.drawnTile = drawn
-    this.selected = selected
+    // selected 可以是单张或数组(换三张多选)
+    this.selected = new Set(Array.isArray(selected) ? selected
+      : selected === null || selected === undefined ? [] : [selected])
     const keep = new Set(tiles)
     for (const [id, mesh] of this.handMeshes) {
       if (!keep.has(id)) {
@@ -191,7 +193,7 @@ export class MahjongScene {
       if (!mesh) return
       const gapExtra = (this.drawnTile !== null && i === n - 1) ? step * 0.45 : 0
       const x = (i - (n - 1) / 2) * step + gapExtra
-      const y = anchorY + (this.selected === t ? 0.42 : 0)
+      const y = anchorY + (this.selected.has(t) ? 0.42 : 0)
       mesh.quaternion.copy(this.camera.quaternion)
       mesh.renderOrder = 100 + i
       mesh.scale.setScalar(scale)

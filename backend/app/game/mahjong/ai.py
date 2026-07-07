@@ -7,6 +7,16 @@ from collections import Counter
 from .tiles import kind_of, suit_of
 
 
+def choose_exchange(hand: list[int]) -> list[int]:
+    """换三张:从张数最少但仍有 3 张的花色里,挑 3 张最没用的。"""
+    by: dict[int, list[int]] = {}
+    for t in hand:
+        by.setdefault(suit_of(kind_of(t)), []).append(t)
+    suit = min((s for s in by if len(by[s]) >= 3), key=lambda s: (len(by[s]), s))
+    cnt = Counter(kind_of(t) for t in hand)
+    return sorted(by[suit], key=lambda t: (_usefulness(kind_of(t), cnt), kind_of(t)))[:3]
+
+
 def choose_lack(hand: list[int]) -> int:
     """定缺:选手里张数最少的花色。"""
     by_suit = Counter(suit_of(kind_of(t)) for t in hand)

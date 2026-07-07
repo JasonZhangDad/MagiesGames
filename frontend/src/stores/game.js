@@ -58,6 +58,7 @@ export const useGameStore = defineStore('game', {
       else this.selected.push(card)
     },
     // ---- 麻将 ----
+    exchange(tiles) { this.send({ t: 'EXCHANGE', tiles }); this.selected = [] },
     lack(suit) { this.send({ t: 'LACK', suit }) },
     discardTile(tile) { this.send({ t: 'DISCARD', tile }); this.selected = [] },
     mjClaim(action) { this.send({ t: 'MJCLAIM', action }) },

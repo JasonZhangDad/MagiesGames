@@ -1,8 +1,9 @@
 """四川麻将(血战到底)状态机 —— 服务端唯一可信源,纯逻辑无 IO。
 
-流程:dingque(定缺) → playing(摸打/碰杠/胡,胡牌离场继续打) → settled。
-终局:三家胡牌 或 牌墙摸完。简化约定:无吃、无换三张、无抢杠胡、流局不查叫。
+流程:exchange(换三张,可选) → dingque(定缺) → playing(摸打/碰杠/胡,胡牌离场继续打) → settled。
+终局:三家胡牌 或 牌墙摸完。简化约定:无吃、无抢杠胡、流局不查叫退税。
 计分:番 n → 单位 2^(n-1);点炮者付,自摸时所有未胡玩家各付。
+刮风下雨(杠即时算分):直杠放杠者付 2;补杠在场其他各付 1;暗杠在场其他各付 2。
 """
 import random
 from collections import Counter
@@ -15,7 +16,8 @@ class MahjongMatch:
     SEATS = 4
 
     def __init__(self, wall: list[int] | None = None, hands: list[list[int]] | None = None,
-                 dealer: int = 0, rng: random.Random | None = None):
+                 dealer: int = 0, rng: random.Random | None = None,
+                 exchange: bool = False):
         self.rng = rng or random.Random()
         self.dealer = dealer
         if hands is None:
@@ -29,7 +31,10 @@ class MahjongMatch:
         self.melds: list[list[dict]] = [[], [], [], []]
         self.discards: list[list[int]] = [[], [], [], []]
         self.lacks: list[int | None] = [None] * 4
-        self.phase = "dingque"
+        self.exchange_sel: list[list[int] | None] = [None] * 4
+        self.exchange_dir: int | None = None
+        self.last_gang_pay: dict | None = None
+        self.phase = "exchange" if exchange else "dingque"
         self.current: int | None = None
         self.drawn: int | None = None
         self.last_gang_draw = False
@@ -72,6 +77,29 @@ class MahjongMatch:
         while s in self.out:
             s = (s + 1) % 4
         return s
+
+    # ---------- 换三张 ----------
+
+    def set_exchange(self, seat: int, tiles: list[int]):
+        self._require(self.phase == "exchange", "现在不是换三张阶段")
+        self._require(self.exchange_sel[seat] is None, "你已经选过了")
+        tiles = list(tiles)
+        self._require(len(tiles) == 3 and len(set(tiles)) == 3, "必须选 3 张不同的牌")
+        self._require(all(t in self.hands[seat] for t in tiles), "牌不在你手里")
+        self._require(len({suit_of(kind_of(t)) for t in tiles}) == 1, "3 张必须同一花色")
+        self.exchange_sel[seat] = tiles
+        self.history.append({"a": "exchange", "seat": seat})
+        if all(v is not None for v in self.exchange_sel):
+            self.exchange_dir = self.rng.choice((1, 2, 3))
+            for s in range(4):
+                for t in self.exchange_sel[s]:
+                    self.hands[s].remove(t)
+            for s in range(4):
+                self.hands[(s + self.exchange_dir) % 4].extend(self.exchange_sel[s])
+            for s in range(4):
+                self.hands[s].sort()
+            self.history.append({"a": "exchange_done", "dir": self.exchange_dir})
+            self.phase = "dingque"
 
     # ---------- 定缺 ----------
 
@@ -147,6 +175,21 @@ class MahjongMatch:
         else:
             self._draw(self._next_active(seat))
 
+    # ---------- 刮风下雨(杠即时算分) ----------
+
+    def _gang_pay(self, seat: int, gtype: str, from_seat: int | None = None):
+        per = {"zhigang": 2, "angang": 2, "bugang": 1}[gtype]
+        if gtype == "zhigang":
+            payers = [from_seat]
+        else:
+            payers = [s for s in self.active() if s != seat]
+        for p in payers:
+            self.deltas[p] -= per
+            self.deltas[seat] += per
+        self.last_gang_pay = {"type": gtype, "seat": seat,
+                              "units": per * len(payers), "payers": payers}
+        self.history.append({"a": "gang_pay", **self.last_gang_pay})
+
     # ---------- 碰杠胡响应 ----------
 
     def claim(self, seat: int, action: str):
@@ -189,6 +232,7 @@ class MahjongMatch:
                                       "from_seat": src})
                 self.history.append({"a": act, "seat": s, "kind": kind})
                 if act == "gang":
+                    self._gang_pay(s, "zhigang", from_seat=src)
                     self._draw(s, gang=True)
                 else:
                     self.current = s
@@ -209,6 +253,7 @@ class MahjongMatch:
             self.hands[seat].remove(t)
         self.melds[seat].append({"type": "angang", "kind_id": kind, "tiles": removed})
         self.history.append({"a": "angang", "seat": seat, "kind": kind})
+        self._gang_pay(seat, "angang")
         self._draw(seat, gang=True)
 
     def bugang(self, seat: int, kind: int):
@@ -222,6 +267,7 @@ class MahjongMatch:
                 m["tiles"].append(tile)
                 break
         self.history.append({"a": "bugang", "seat": seat, "kind": kind})
+        self._gang_pay(seat, "bugang")
         self._draw(seat, gang=True)
 
     # ---------- 胡 ----------

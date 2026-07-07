@@ -84,7 +84,7 @@ def _handle(uid: int, msg: dict):
     seat = room.seat_of(uid)
     if t in ("CALL", "PLAY", "PASS") and (room.game != "ddz" or room.match is None):
         raise ValueError("当前没有进行中的斗地主对局")
-    if t in ("LACK", "DISCARD", "MJCLAIM", "ANGANG", "BUGANG", "HU") \
+    if t in ("EXCHANGE", "LACK", "DISCARD", "MJCLAIM", "ANGANG", "BUGANG", "HU") \
             and (room.game != "mahjong" or room.match is None):
         raise ValueError("当前没有进行中的麻将对局")
     if t == "READY":
@@ -106,6 +106,11 @@ def _handle(uid: int, msg: dict):
     elif t == "CHAT":
         room.chat(uid, str(msg.get("text", "")))
     # ---- 麻将 ----
+    elif t == "EXCHANGE":
+        tiles = msg.get("tiles")
+        if not isinstance(tiles, list) or not all(isinstance(x, int) for x in tiles):
+            raise ValueError("换牌数据不合法")
+        room.do_exchange(seat, tiles)
     elif t == "LACK":
         room.do_lack(seat, int(msg.get("suit", 0)))
     elif t == "DISCARD":

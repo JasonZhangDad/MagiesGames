@@ -161,7 +161,7 @@ class Room:
         if self.game == "ddz":
             self.match = DdzMatch(first_seat=random.randrange(3))
         else:
-            self.match = MahjongMatch(dealer=random.randrange(4))
+            self.match = MahjongMatch(dealer=random.randrange(4), exchange=True)
         self.started_at = time.time()
         self.version += 1
         for s in self.seats:
@@ -182,7 +182,7 @@ class Room:
             return
         if self.game == "ddz":
             limit = config.CALL_TIMEOUT if m.phase == "calling" else config.PLAY_TIMEOUT
-        elif m.phase == "dingque":
+        elif m.phase in ("exchange", "dingque"):
             limit = config.LACK_TIMEOUT
         elif m.claiming:
             limit = config.CLAIM_TIMEOUT
@@ -197,6 +197,12 @@ class Room:
             return
         m = self.match
         if self.game == "mahjong":
+            if m.phase == "exchange":
+                for i, s in enumerate(self.seats):
+                    if m.exchange_sel[i] is None:
+                        self._mark_auto(i)
+                        self._act_ai(i)
+                return
             if m.phase == "dingque":
                 for i, s in enumerate(self.seats):
                     if m.lacks[i] is None:
@@ -233,7 +239,10 @@ class Room:
 
         pending: list[int] = []
         if self.game == "mahjong":
-            if m.phase == "dingque":
+            if m.phase == "exchange":
+                pending = [i for i, s in enumerate(self.seats)
+                           if m.exchange_sel[i] is None and needs_ai(s)]
+            elif m.phase == "dingque":
                 pending = [i for i, s in enumerate(self.seats)
                            if m.lacks[i] is None and needs_ai(s)]
             elif m.claiming:
@@ -275,6 +284,10 @@ class Room:
 
     def _act_ai_mj(self, seat_no: int):
         m = self.match
+        if m.phase == "exchange":
+            if m.exchange_sel[seat_no] is None:
+                self.do_exchange(seat_no, mj_ai.choose_exchange(m.hands[seat_no]))
+            return
         if m.phase == "dingque":
             if m.lacks[seat_no] is None:
                 self.do_lack(seat_no, mj_ai.choose_lack(m.hands[seat_no]))
@@ -352,6 +365,15 @@ class Room:
         self.broadcast()
         self.drive()
 
+    def do_exchange(self, seat_no: int, tiles: list[int]):
+        m = self.match
+        m.set_exchange(seat_no, tiles)
+        if m.phase == "dingque":  # 全员已换,公布方向
+            self.event({"e": "exchanged", "seat": seat_no})
+            self._mj_after({"e": "exchange_done", "dir": m.exchange_dir})
+        else:
+            self._mj_after({"e": "exchanged", "seat": seat_no})
+
     def do_lack(self, seat_no: int, suit: int):
         self.match.set_lack(seat_no, suit)
         self._mj_after({"e": "lack", "seat": seat_no, "suit": suit})
@@ -368,6 +390,7 @@ class Room:
     def do_claim(self, seat_no: int, action: str):
         m = self.match
         before_out = set(m.out)
+        hlen = len(m.history)
         m.claim(seat_no, action)
         ev = None
         if m.claiming is None:  # 全员已响应,已裁决
@@ -376,21 +399,25 @@ class Room:
                 ev = {"e": "hu_multi",
                       "winners": [{k: w[k] for k in ("seat", "fan", "names", "zimo", "from_seat")}
                                   for w in new_winners]}
-            elif m.history and m.history[-1].get("a") in ("peng", "gang"):
-                h = m.history[-1]
-                ev = {"e": h["a"], "seat": h["seat"], "kind": h["kind"],
-                      "label": kind_label(h["kind"])}
+            else:
+                acts = [h for h in m.history[hlen:] if h.get("a") in ("peng", "gang")]
+                if acts:
+                    h = acts[0]
+                    ev = {"e": h["a"], "seat": h["seat"], "kind": h["kind"],
+                          "label": kind_label(h["kind"])}
+                    if h["a"] == "gang":
+                        ev["pay"] = m.last_gang_pay
         self._mj_after(ev)
 
     def do_angang(self, seat_no: int, kind: int):
         self.match.angang(seat_no, kind)
         self._mj_after({"e": "angang", "seat": seat_no, "kind": kind,
-                        "label": kind_label(kind)})
+                        "label": kind_label(kind), "pay": self.match.last_gang_pay})
 
     def do_bugang(self, seat_no: int, kind: int):
         self.match.bugang(seat_no, kind)
         self._mj_after({"e": "bugang", "seat": seat_no, "kind": kind,
-                        "label": kind_label(kind)})
+                        "label": kind_label(kind), "pay": self.match.last_gang_pay})
 
     def do_hu(self, seat_no: int):
         m = self.match
@@ -579,6 +606,7 @@ class Room:
                                    for x in m.melds[i]] if m else [])
                 entry["discards"] = m.discards[i] if m else []
                 entry["hu"] = bool(m and i in m.out)
+                entry["exchanged"] = bool(m and m.exchange_sel[i] is not None)
             seats.append(entry)
         st = {
             "code": self.code, "private": self.private, "phase": self.phase,
@@ -620,7 +648,7 @@ class Room:
                                               if i not in m.claiming["responses"]]}
                 if my_seat in m.claiming["options"] and my_seat not in m.claiming["responses"]:
                     st["my_claim"] = m.claiming["options"][my_seat]
-            if m and my_seat is not None and m.phase in ("dingque", "playing", "settled"):
+            if m and my_seat is not None and m.phase in ("exchange", "dingque", "playing", "settled"):
                 st["my_hand"] = sorted(m.hands[my_seat])
                 st["my_drawn"] = m.drawn if m.current == my_seat else None
                 st["my_options"] = m.self_options(my_seat) if m.phase == "playing" else {}
