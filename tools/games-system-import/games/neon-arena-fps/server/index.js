@@ -97,7 +97,7 @@ const DEFS = {
 // ---- 连接防刷：同 IP 短时间内大量连接直接拒绝 ----
 const connTracker = new Map();  // ip -> { times: [timestamps], blocked: until }
 const CONN_WINDOW = 10000;      // 10 秒窗口
-const CONN_MAX = 8;             // 窗口内最大连接数
+const CONN_MAX = 30;            // 窗口内最大连接数
 const CONN_BLOCK_BASE = 30000;  // 首次封堵 30 秒
 const CONN_BLOCK_MAX = 600000;  // 最高封堵 10 分钟
 function checkConnFlood(ip) {
@@ -126,7 +126,7 @@ setInterval(() => {
 }, 60000);
 
 // ---- 同IP并发连接限制 ----
-const IP_MAX_CONCURRENT = 4;
+const IP_MAX_CONCURRENT = 20;
 const ipConns = new Map();  // ip -> count
 function ipConnAdd(ip) {
   const c = (ipConns.get(ip) || 0) + 1;
