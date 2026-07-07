@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createSeatRuntime, useGodotClock, useGodotSignals } from '../game/godotRuntime'
 import { isMuted, sfx, toggleMute } from '../sounds'
 import { useGameStore } from '../stores/game'
 import { useUserStore } from '../stores/user'
@@ -12,10 +13,7 @@ const muted = ref(isMuted())
 const lowSpec = ref(localStorage.getItem('mg_lowspec') === '1')
 const showSettle = ref(false)
 const settle = ref(null)
-const bubbles = reactive({})
-const now = ref(Date.now() / 1000)
 let scene = null
-let clockTimer = null
 
 const room = computed(() => game.room)
 const mySeat = computed(() => room.value?.my_seat)
@@ -25,17 +23,9 @@ const me = computed(() => (mySeat.value !== null && room.value) ? room.value.sea
 
 const isWatcher = computed(() => !!room.value?.spectator)
 const anchorSeat = computed(() => mySeat.value ?? 0)  // 观战以 0 号位为视角
-const relOf = (seat) => (seat - anchorSeat.value + 3) % 3
-const seatAtRel = (rel) => {
-  if (!room.value) return null
-  return room.value.seats[(anchorSeat.value + rel) % 3]
-}
-const seatNoAtRel = (rel) => (anchorSeat.value + rel) % 3
-
-const countdown = computed(() => {
-  if (!room.value?.deadline) return null
-  return Math.max(0, Math.ceil(room.value.deadline - now.value))
-})
+const { relOf, seatAtRel, seatNoAtRel } = createSeatRuntime(room, anchorSeat, 3)
+const { countdown } = useGodotClock(room)
+const { bubbles, bubble, clearBubbles } = useGodotSignals()
 
 const callOptions = computed(() => {
   const max = room.value?.max_call ?? 0
@@ -60,11 +50,9 @@ onMounted(() => {
   scene.setLowSpec(lowSpec.value)
   if (import.meta.env.DEV) window.__ts = scene
   syncFromState(room.value, true)
-  clockTimer = setInterval(() => { now.value = Date.now() / 1000 }, 250)
 })
 
 onBeforeUnmount(() => {
-  clearInterval(clockTimer)
   scene?.dispose()
   scene = null
 })
@@ -98,13 +86,6 @@ watch(() => game.hintCards, (cards) => {
 
 // ---------- 事件动画 ----------
 
-function bubble(seat, text, ms = 2400) {
-  bubbles[seat] = { text, id: Date.now() }
-  setTimeout(() => {
-    if (bubbles[seat] && Date.now() - bubbles[seat].id >= ms - 20) delete bubbles[seat]
-  }, ms)
-}
-
 // 逐条消费事件队列(watcher 合并没关系,这里把积压的全部处理掉)
 watch(() => game.events.length, () => {
   while (game.events.length) handleEvent(game.events.shift())
@@ -117,7 +98,7 @@ function handleEvent(e) {
     case 'redeal': {
       showSettle.value = false
       settle.value = null
-      Object.keys(bubbles).forEach(k => delete bubbles[k])
+      clearBubbles()
       game.selected = []
       scene.clearTricks()
       if (e.e === 'redeal') game.toast('无人叫分,重新发牌')
@@ -203,7 +184,7 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
 </script>
 
 <template>
-  <div class="gamepage" v-if="room">
+  <div class="gamepage godot-game godot-card-table" v-if="room">
     <canvas ref="canvasEl" class="stage" />
 
     <!-- 顶栏 -->
@@ -361,7 +342,7 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
       </div>
     </transition>
   </div>
-  <div v-else class="gamepage loading"><div class="chip">正在进入房间…</div></div>
+  <div v-else class="gamepage godot-game loading"><div class="chip">正在进入房间…</div></div>
 </template>
 
 <style scoped>

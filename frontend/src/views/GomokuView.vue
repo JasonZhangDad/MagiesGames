@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createSeatRuntime, useGodotClock, useGodotSignals } from '../game/godotRuntime'
 import { isMuted, sfx, toggleMute } from '../sounds'
 import { useGameStore } from '../stores/game'
 import { useUserStore } from '../stores/user'
@@ -12,10 +13,7 @@ const muted = ref(isMuted())
 const lowSpec = ref(localStorage.getItem('mg_lowspec') === '1')
 const showSettle = ref(false)
 const settle = ref(null)
-const bubbles = reactive({})
-const now = ref(Date.now() / 1000)
 let scene = null
-let clockTimer = null
 
 const room = computed(() => game.room)
 const mySeat = computed(() => room.value?.my_seat)
@@ -24,14 +22,12 @@ const me = computed(() => (mySeat.value !== null && room.value) ? room.value.sea
 const myTurn = computed(() => room.value?.current === mySeat.value && mySeat.value !== null)
 const isWatcher = computed(() => !!room.value?.spectator)
 const anchorSeat = computed(() => mySeat.value ?? 0)
-const oppSeat = computed(() => room.value?.seats?.[(anchorSeat.value + 1) % 2] ?? null)
-const oppSeatNo = computed(() => (anchorSeat.value + 1) % 2)
+const { seatAtRel, seatNoAtRel } = createSeatRuntime(room, anchorSeat, 2)
+const oppSeat = computed(() => seatAtRel(1))
+const oppSeatNo = computed(() => seatNoAtRel(1))
 const blackSeat = computed(() => room.value?.first ?? 0)
-
-const countdown = computed(() => {
-  if (!room.value?.deadline) return null
-  return Math.max(0, Math.ceil(room.value.deadline - now.value))
-})
+const { countdown } = useGodotClock(room)
+const { bubbles, bubble, clearBubbles } = useGodotSignals()
 
 const STONE_ICON = { black: '⚫', white: '⚪' }
 
@@ -45,11 +41,9 @@ onMounted(() => {
   })
   scene.setLowSpec(lowSpec.value)
   syncFromState(room.value, true)
-  clockTimer = setInterval(() => { now.value = Date.now() / 1000 }, 250)
 })
 
 onBeforeUnmount(() => {
-  clearInterval(clockTimer)
   scene?.dispose()
   scene = null
 })
@@ -73,13 +67,6 @@ watch(() => game.hintCards, (cells) => {
   }
 })
 
-function bubble(seat, text, ms = 2400) {
-  bubbles[seat] = { text, id: Date.now() }
-  setTimeout(() => {
-    if (bubbles[seat] && Date.now() - bubbles[seat].id >= ms - 20) delete bubbles[seat]
-  }, ms)
-}
-
 watch(() => game.events.length, () => {
   while (game.events.length) handleEvent(game.events.shift())
 })
@@ -90,7 +77,7 @@ function handleEvent(e) {
     case 'deal':
       showSettle.value = false
       settle.value = null
-      Object.keys(bubbles).forEach(k => delete bubbles[k])
+      clearBubbles()
       scene.reset()
       sfx.deal()
       break
@@ -137,7 +124,7 @@ const settleTitle = computed(() => {
 </script>
 
 <template>
-  <div class="gamepage" v-if="room">
+  <div class="gamepage godot-game godot-board-game" v-if="room">
     <canvas ref="canvasEl" class="stage" />
 
     <header class="hud top">
@@ -265,7 +252,7 @@ const settleTitle = computed(() => {
       </div>
     </transition>
   </div>
-  <div v-else class="gamepage loading"><div class="chip">正在进入房间…</div></div>
+  <div v-else class="gamepage godot-game loading"><div class="chip">正在进入房间…</div></div>
 </template>
 
 <style scoped>
