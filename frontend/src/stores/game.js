@@ -68,5 +68,7 @@ export const useGameStore = defineStore('game', {
     huSelf() { this.send({ t: 'HU' }) },
     // ---- 五子棋 ----
     place(x, y) { this.send({ t: 'PLACE', x, y }) },
+    // ---- 象棋 ----
+    xqmove(fx, fy, tx, ty) { this.send({ t: 'XQMOVE', fx, fy, tx, ty }) },
   },
 })

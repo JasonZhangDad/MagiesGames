@@ -18,8 +18,11 @@ from .game.mahjong import ai as mj_ai
 from .game.mahjong.engine import MahjongMatch
 from .game.mahjong.tiles import kind_label, kind_of
 from .game.patterns import KIND_LABEL
+from .game.xiangqi import ai as xq_ai
+from .game.xiangqi.engine import XiangqiMatch
+from .game.xiangqi.engine import label_of as xq_label
 
-SEATS_OF = {"ddz": 3, "mahjong": 4, "gomoku": 2}
+SEATS_OF = {"ddz": 3, "mahjong": 4, "gomoku": 2, "xiangqi": 2}
 
 BOT_NAMES = ["AI·星尘", "AI·闪电", "AI·大圣", "AI·夜枭", "AI·白泽", "AI·青鸾", "AI·墨影", "AI·雷酱"]
 BOT_AVATARS = ["🤖", "👾", "🛸", "🎯"]
@@ -171,6 +174,8 @@ class Room:
             self.match = DdzMatch(first_seat=random.randrange(3))
         elif self.game == "gomoku":
             self.match = GomokuMatch(first=random.randrange(2))
+        elif self.game == "xiangqi":
+            self.match = XiangqiMatch(red_seat=random.randrange(2))
         else:
             self.match = MahjongMatch(dealer=random.randrange(4), exchange=True)
         self.started_at = time.time()
@@ -284,6 +289,11 @@ class Room:
                 if m.phase == "playing" and m.current == seat_no:
                     x, y = gmk_ai.choose_move(m, seat_no)
                     self.do_place(seat_no, x, y)
+            elif self.game == "xiangqi":
+                if m.phase == "playing" and m.current == seat_no:
+                    mv = xq_ai.choose_move(m, seat_no)
+                    if mv:
+                        self.do_xqmove(seat_no, mv[0], mv[1])
             elif m.phase == "calling":
                 zeros = sum(1 for c in m.calls if c == 0)
                 must = m.redeal_count >= 1 and zeros == 2
@@ -414,6 +424,67 @@ class Room:
                 s.ready = False
                 s.auto = False
         self.event({"e": "gmk_settle", "result": self._gmk_result()})
+        for i, s in enumerate(self.seats):
+            if s and not s.is_bot and not s.connected:
+                self.seats[i] = None
+        if not self.humans():
+            self._close()
+
+    # ---------- 象棋动作(人类与 AI 共用) ----------
+
+    def do_xqmove(self, seat_no: int, frm, to):
+        m = self.match
+        frm = (int(frm[0]), int(frm[1]))
+        to = (int(to[0]), int(to[1]))
+        m.move(seat_no, frm, to)
+        self.version += 1
+        rec = m.last
+        side = m.side_of(seat_no)
+        ev = {"e": "xqmove", "seat": seat_no, "from": rec["from"], "to": rec["to"],
+              "kind": rec["kind"], "label": xq_label(side, rec["kind"]),
+              "captured": rec["captured"],
+              "check": m.phase == "playing" and m.in_check(1 - side)}
+        self.event(ev)
+        if m.phase == "settled":
+            self._on_settle_xq()
+        else:
+            self._arm_turn()
+        self.broadcast()
+        self.drive()
+
+    def _xq_result(self) -> dict:
+        r = self.match.result
+        return {**r, "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]]}
+
+    def _on_settle_xq(self):
+        m = self.match
+        r = m.result
+        self.turn_deadline = None
+        players = []
+        for i, s in enumerate(self.seats):
+            role = "draw" if r["winner_seat"] is None else \
+                ("winner" if r["winner_seat"] == i else "loser")
+            players.append({
+                "user_id": s.user_id, "nickname": s.nickname, "is_bot": s.is_bot,
+                "seat_no": i, "role": role,
+                "delta_coin": r["deltas"][i] * config.COIN_UNIT, "delta_rank": r["deltas"][i],
+            })
+        db.record_match(self.code, self.started_at or time.time(), {
+            "base": 1, "multiplier": 1,
+            "winner_role": "draw" if r["winner_seat"] is None else "winner",
+            "spring": False, "bombs": 0,
+        }, players, m.history, game_type="xiangqi")
+        for i, s in enumerate(self.seats):
+            if s.is_bot:
+                s.coin = max(0, s.coin + r["deltas"][i] * config.COIN_UNIT)
+                s.ready = True
+            else:
+                u = db.get_user(s.user_id)
+                if u:
+                    s.coin = u["coin"]
+                s.ready = False
+                s.auto = False
+        self.event({"e": "xq_settle", "result": self._xq_result()})
         for i, s in enumerate(self.seats):
             if s and not s.is_bot and not s.connected:
                 self.seats[i] = None
@@ -650,6 +721,9 @@ class Room:
             return [arg] if isinstance(arg, int) else None
         if self.game == "gomoku":
             return list(gmk_ai.choose_move(self.match, i))
+        if self.game == "xiangqi":
+            mv = xq_ai.choose_move(self.match, i)
+            return [*mv[0], *mv[1]] if mv else None
         return ai_hint(self.match, i)
 
     def snapshot(self, uid: int | None) -> dict:
@@ -671,6 +745,8 @@ class Room:
                 entry["role"] = m.role_of(i) if m and m.landlord is not None else None
             elif self.game == "gomoku":
                 entry["stone"] = ("black" if m.first == i else "white") if m else None
+            elif self.game == "xiangqi":
+                entry["camp"] = ("red" if m.red_seat == i else "black") if m else None
             else:
                 entry["lack"] = m.lacks[i] if m else None
                 entry["melds"] = ([{"type": x["type"], "kind": x["kind_id"],
@@ -717,6 +793,22 @@ class Room:
             })
             if m and m.phase == "settled" and m.result:
                 st["result"] = self._gmk_result()
+        elif self.game == "xiangqi":
+            side = m.side_of(my_seat) if m and my_seat is not None else None
+            st.update({
+                "current": m.current if m and m.phase == "playing" else None,
+                "board": ([[f"{c[0]}{c[1]}" if c else None for c in row]
+                           for row in m.board] if m else None),
+                "red_seat": m.red_seat if m else None,
+                "last_move": ({"from": m.last["from"], "to": m.last["to"]} if m and m.last else None),
+                "in_check": bool(m and m.phase == "playing" and side is not None
+                                 and m.turn_side == side and m.in_check(side)),
+            })
+            if m and m.phase == "playing" and my_seat is not None and m.current == my_seat:
+                st["my_moves"] = [[f[0], f[1], t[0], t[1]]
+                                  for f, t in m.legal_moves(m.side_of(my_seat))]
+            if m and m.phase == "settled" and m.result:
+                st["result"] = self._xq_result()
         else:
             st.update({
                 "current": m.current if m and m.phase == "playing" else None,

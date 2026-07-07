@@ -101,6 +101,8 @@ def _handle(uid: int, msg: dict):
         raise ValueError("当前没有进行中的麻将对局")
     if t == "PLACE" and (room.game != "gomoku" or room.match is None):
         raise ValueError("当前没有进行中的五子棋对局")
+    if t == "XQMOVE" and (room.game != "xiangqi" or room.match is None):
+        raise ValueError("当前没有进行中的象棋对局")
     if t == "READY":
         room.set_ready(uid, bool(msg.get("ready", True)))
     elif t == "CALL":
@@ -143,6 +145,10 @@ def _handle(uid: int, msg: dict):
     # ---- 五子棋 ----
     elif t == "PLACE":
         room.do_place(seat, int(msg.get("x", -1)), int(msg.get("y", -1)))
+    # ---- 象棋 ----
+    elif t == "XQMOVE":
+        room.do_xqmove(seat, (int(msg.get("fx", -1)), int(msg.get("fy", -1))),
+                       (int(msg.get("tx", -1)), int(msg.get("ty", -1))))
 
 
 @router.websocket("/ws")
