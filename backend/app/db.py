@@ -139,6 +139,35 @@ def leaderboard(limit=50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def admin_stats() -> dict:
+    import time as _time
+    day_start = _time.time() - (_time.time() - _time.timezone) % 86400
+    users_total = _exec("SELECT COUNT(*) c FROM user_account").fetchone()["c"]
+    users_registered = _exec(
+        "SELECT COUNT(*) c FROM user_account WHERE username IS NOT NULL").fetchone()["c"]
+    matches_total = _exec("SELECT COUNT(*) c FROM game_match").fetchone()["c"]
+    matches_today = _exec(
+        "SELECT COUNT(*) c FROM game_match WHERE ended_at >= ?", (day_start,)).fetchone()["c"]
+    by_game = {r["game_type"]: r["c"] for r in _exec(
+        "SELECT game_type, COUNT(*) c FROM game_match GROUP BY game_type").fetchall()}
+    return {"users_total": users_total, "users_registered": users_registered,
+            "matches_total": matches_total, "matches_today": matches_today,
+            "matches_by_game": by_game}
+
+
+def admin_recent_matches(limit=20) -> list[dict]:
+    rows = _exec("""SELECT id, room_code, game_type, multiplier, winner_role, ended_at
+                    FROM game_match ORDER BY id DESC LIMIT ?""", (limit,)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["players"] = [dict(p) for p in _exec(
+            """SELECT nickname, is_bot, seat_no, role, delta_coin
+               FROM game_player WHERE match_id = ? ORDER BY seat_no""", (r["id"],)).fetchall()]
+        out.append(d)
+    return out
+
+
 def recent_matches(uid: int, limit=20) -> list[dict]:
     rows = _exec("""SELECT m.id, m.room_code, m.base, m.multiplier, m.winner_role, m.spring,
                     m.bombs, m.ended_at, p.role, p.delta_coin, p.delta_rank, p.result

@@ -3,8 +3,9 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import auth, db
+from . import auth, config, db
 from .rooms import manager
+from .ws import conn_mgr
 from .ws import router as ws_router
 
 app = FastAPI(title="Magies 3D 棋牌竞技大厅", docs_url=None, redoc_url=None)
@@ -82,6 +83,29 @@ def profile(uid: int):
     if not user:
         raise HTTPException(404, "用户不存在")
     return {"user": user, "matches": db.recent_matches(uid)}
+
+
+@app.get("/api/admin/stats")
+def admin_stats(key: str = ""):
+    if not config.ADMIN_KEY or key != config.ADMIN_KEY:
+        raise HTTPException(403, "无权访问")
+    rooms_live = []
+    for r in manager.rooms.values():
+        rooms_live.append({
+            "code": r.code, "game": r.game, "phase": r.phase, "private": r.private,
+            "watchers": len(r.spectators),
+            "humans": sum(1 for s in r.seats if s and not s.is_bot),
+            "bots": sum(1 for s in r.seats if s and s.is_bot),
+            "players": [{"nickname": s.nickname, "bot": s.is_bot}
+                        for s in r.seats if s],
+        })
+    return {
+        "online": len(conn_mgr.conns),
+        "rooms": rooms_live,
+        **db.admin_stats(),
+        "leaderboard": db.leaderboard(10),
+        "recent": db.admin_recent_matches(20),
+    }
 
 
 @app.get("/api/health")

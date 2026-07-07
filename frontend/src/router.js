@@ -5,13 +5,14 @@ const routes = [
   { path: '/', name: 'landing', component: () => import('./views/Landing.vue') },
   { path: '/lobby', name: 'lobby', component: () => import('./views/Lobby.vue') },
   { path: '/game', name: 'game', component: () => import('./views/GameView.vue') },
+  { path: '/admin', name: 'admin', component: () => import('./views/Admin.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach((to) => {
-  if (to.name !== 'landing' && !getToken()) return { name: 'landing' }
+  if (to.name !== 'landing' && to.name !== 'admin' && !getToken()) return { name: 'landing' }
   return true
 })
 

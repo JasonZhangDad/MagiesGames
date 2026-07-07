@@ -18,6 +18,7 @@ else:
     _secret_file.chmod(0o600)
 
 FAST = os.environ.get("MAGIES_FAST") == "1"
+ADMIN_KEY = os.environ.get("MAGIES_ADMIN_KEY", "")  # 为空则后台统计接口关闭
 
 CALL_TIMEOUT = 0.5 if FAST else 20.0      # 叫分限时
 PLAY_TIMEOUT = 0.5 if FAST else 30.0      # 出牌限时

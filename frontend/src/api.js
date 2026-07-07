@@ -23,4 +23,5 @@ export const api = {
   rooms: () => req('/api/rooms'),
   leaderboard: () => req('/api/leaderboard'),
   profile: (id) => req(`/api/profile/${id}`),
+  adminStats: (key) => req(`/api/admin/stats?key=${encodeURIComponent(key)}`),
 }
