@@ -71,29 +71,8 @@ const ac = new AntiCheat(fpsPreset({
   log: e => console.warn(`[anticheat] ${e.name || e.key} ${e.rule} ${e.detail} → score=${e.score}`),
 }));
 
-// ---- 底层 TCP 瞬间涌入丢弃与自动封禁 (防大并发卡顿) ----
-const tcpConnHistory = new Map(); // ip -> [timestamps]
-server.on('connection', (socket) => {
-  const rawIp = socket.remoteAddress;
-  if (!rawIp) return;
-  const ip = rawIp.replace(/^::ffff:/, '');
-  const ipKey = 'ip:' + rawIp;
-  const ban = ac.isBanned([ipKey]);
-  if (ban) {
-    socket.destroy();
-    return;
-  }
-  const now = Date.now();
-  let times = tcpConnHistory.get(ip) || [];
-  times = times.filter(t => now - t < 2000);
-  times.push(now);
-  tcpConnHistory.set(ip, times);
-  if (times.length > 6) {
-    console.log(`[TCP-SURGE] IP ${ip} 瞬间涌入攻击，直接销毁并封禁。`);
-    ac.registerBan([ipKey], 15, 'TCP 瞬间涌入攻击');
-    socket.destroy();
-  }
-});
+// ---- 底层 TCP 瞬间涌入防刷 (由于前置 Nginx 反代，这里会把网关 IP 封掉，故废弃) ----
+// 移除 TCP 级封禁，由 ws.on('connection') 的 checkConnFlood 处理。
 setInterval(() => ac.tick(1), 1000);
 
 const world = new World(broadcast, sendTo, ac);
