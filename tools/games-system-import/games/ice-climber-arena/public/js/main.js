@@ -179,8 +179,8 @@ function initMenu() {
 async function refreshMenuData() {
   try {
     const [st, lb] = await Promise.all([
-      fetch('/api/state').then((r) => r.json()),
-      fetch('/api/leaderboard').then((r) => r.json()),
+      fetch('api/state').then((r) => r.json()),
+      fetch('api/leaderboard').then((r) => r.json()),
     ]);
     $('menu-round').textContent = st.round;
     $('menu-online').textContent = st.players;

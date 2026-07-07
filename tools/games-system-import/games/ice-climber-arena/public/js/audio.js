@@ -98,7 +98,7 @@ class AudioEngine {
     this.loading = true;
     await Promise.all(Object.entries(MANIFEST).map(async ([cue, file]) => {
       try {
-        const res = await fetch('/audio/' + file);
+        const res = await fetch('audio/' + file);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
         this.buffers.set(cue, buf);
