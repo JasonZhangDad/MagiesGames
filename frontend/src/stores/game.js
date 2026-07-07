@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { normalizeGameType } from '../game/gameTypes'
 import { socket } from '../ws'
 
 let toastId = 0
@@ -41,8 +42,8 @@ export const useGameStore = defineStore('game', {
       setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id) }, 2600)
     },
     send(msg) { socket.send(msg) },
-    quick(game = 'ddz') { this.send({ t: 'QUICK', game }) },
-    create(priv, game = 'ddz') { this.send({ t: 'CREATE', private: priv, game }) },
+    quick(game = 'ddz') { this.send({ t: 'QUICK', game: normalizeGameType(game) }) },
+    create(priv, game = 'ddz') { this.send({ t: 'CREATE', private: priv, game: normalizeGameType(game) }) },
     join(code) { this.send({ t: 'JOIN', code }) },
     watch(code) { this.send({ t: 'WATCH', code }) },
     leave() { this.send({ t: 'LEAVE' }); this.selected = [] },

@@ -99,7 +99,7 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
           <h2 class="game-name title-grad">3D 斗地主</h2>
           <p class="game-desc">叫分抢地主 · 炸弹翻倍 · 春天 ×2<br />缺人 AI 秒补位,永不等待</p>
           <div class="hero-btns">
-            <button class="btn btn-gold big" @click="quick">⚡ 快速匹配</button>
+            <button class="btn btn-gold big" @click="quick()">⚡ 快速匹配</button>
             <button class="btn btn-cyan" @click="create(false)">创建房间</button>
             <button class="btn btn-cyan" @click="create(true)">好友私密房</button>
             <button class="btn" @click="showJoin = !showJoin">输房号加入</button>
