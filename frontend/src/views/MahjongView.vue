@@ -31,9 +31,12 @@ const exchangeOk = computed(() =>
   game.selected.length === 3 && new Set(game.selected.map(t => suitOf(kindOf(t)))).size === 1)
 const selected = computed(() => game.selected[0] ?? null)
 
-const relOf = (seat) => (seat - mySeat.value + 4) % 4
-const seatAtRel = (rel) => room.value?.seats?.[(mySeat.value + rel) % 4] ?? null
-const seatNoAtRel = (rel) => (mySeat.value + rel) % 4
+const isWatcher = computed(() => !!room.value?.spectator)
+// 观战时以 0 号位为视角锚点
+const anchorSeat = computed(() => mySeat.value ?? 0)
+const relOf = (seat) => (seat - anchorSeat.value + 4) % 4
+const seatAtRel = (rel) => room.value?.seats?.[(anchorSeat.value + rel) % 4] ?? null
+const seatNoAtRel = (rel) => (anchorSeat.value + rel) % 4
 
 const countdown = computed(() => {
   if (!room.value?.deadline) return null
@@ -82,7 +85,7 @@ function syncFromState(st) {
   scene.setMyHand(st.my_hand || [], st.my_drawn ?? null, [...game.selected])
   const rivers = [[], [], [], []]
   st.seats?.forEach((s, i) => {
-    if (s && mySeat.value !== null) rivers[relOf(i)] = s.discards || []
+    if (s) rivers[relOf(i)] = s.discards || []
   })
   scene.setRivers(rivers)
   if (st.phase === 'settled' && st.result && !settle.value) {
@@ -136,7 +139,7 @@ function handleEvent(e) {
       sfx.click()
       break
     case 'discard':
-      if (mySeat.value !== null) scene.animateDiscard(relOf(e.seat), e.tile)
+      scene.animateDiscard(relOf(e.seat), e.tile)
       sfx.play()
       break
     case 'peng':
@@ -216,6 +219,8 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
         <button class="btn icon" @click="game.leave()" title="离开房间">←</button>
         <button class="chip code" @click="copyCode">🀄 {{ room.code }} ⧉</button>
         <span class="chip">血战到底 · 余 {{ room.wall_left ?? 0 }} 张</span>
+        <span v-if="isWatcher" class="chip watch">👁 观战中</span>
+        <span v-else-if="room.watchers" class="chip">👁 {{ room.watchers }}</span>
       </div>
       <div class="right-c">
         <button class="btn icon" @click="doMute">{{ muted ? '🔇' : '🔊' }}</button>
@@ -272,10 +277,13 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
           <template v-else><span class="wav dim">➕</span><span class="dim">空位</span></template>
         </div>
       </div>
-      <div class="wbtns">
+      <div class="wbtns" v-if="!isWatcher">
         <button v-if="!me?.ready" class="btn btn-gold big" @click="game.ready(true)">✓ 准备开局</button>
         <button v-else class="btn" @click="game.ready(false)">取消准备</button>
         <button class="btn btn-ghost" @click="copyCode">邀请好友</button>
+      </div>
+      <div class="wbtns" v-else>
+        <button class="btn btn-gold big" @click="game.join(room.code)">🪑 入座对局</button>
       </div>
     </div>
 
@@ -306,19 +314,19 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
     </div>
 
     <footer class="hud bottom">
-      <div class="my-plate" v-if="me">
-        <div class="pav big" :class="{ turn: myTurn }">
-          <span>{{ me.avatar }}</span>
-          <i v-if="me.hu" class="crown">🏆</i>
+      <div class="my-plate" v-if="seatAtRel(0)">
+        <div class="pav big" :class="{ turn: room.current === seatNoAtRel(0) }">
+          <span>{{ seatAtRel(0).avatar }}</span>
+          <i v-if="seatAtRel(0).hu" class="crown">🏆</i>
         </div>
         <div class="pinfo">
-          <div class="pname">{{ me.nickname }}</div>
+          <div class="pname">{{ seatAtRel(0).nickname }}<span v-if="isWatcher" class="dim"> (视角)</span></div>
           <div class="pmeta">
-            <span v-if="me.lack !== null" class="lackb">缺{{ SUIT_NAMES[me.lack] }}</span>
-            <span v-for="(m, i) in me.melds" :key="i" class="meldb">{{ MELD_LABEL[m.type] }}{{ m.label }}</span>
+            <span v-if="seatAtRel(0).lack !== null" class="lackb">缺{{ SUIT_NAMES[seatAtRel(0).lack] }}</span>
+            <span v-for="(m, i) in seatAtRel(0).melds" :key="i" class="meldb">{{ MELD_LABEL[m.type] }}{{ m.label }}</span>
           </div>
         </div>
-        <span v-if="myTurn && countdown !== null" class="cd big">{{ countdown }}</span>
+        <span v-if="room.current === seatNoAtRel(0) && countdown !== null" class="cd big">{{ countdown }}</span>
       </div>
 
       <!-- 碰杠胡响应 -->
@@ -354,7 +362,7 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
         等待其他玩家响应 {{ room.claiming.label }}…
       </div>
 
-      <div class="chatbar" v-if="phase !== 'waiting'">
+      <div class="chatbar" v-if="phase !== 'waiting' && !isWatcher">
         <button v-for="c in quickChats" :key="c" class="chatchip" @click="game.chat(c)">{{ c }}</button>
       </div>
     </footer>
@@ -385,8 +393,11 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
             </div>
           </div>
           <div class="sbtns">
-            <button v-if="!me?.ready" class="btn btn-gold big" @click="game.ready(true)">🔄 再来一局</button>
-            <button v-else class="btn" disabled>等待其他玩家…</button>
+            <template v-if="!isWatcher">
+              <button v-if="!me?.ready" class="btn btn-gold big" @click="game.ready(true)">🔄 再来一局</button>
+              <button v-else class="btn" disabled>等待其他玩家…</button>
+            </template>
+            <button v-else class="btn btn-gold" @click="showSettle = false">继续观战</button>
             <button class="btn btn-ghost" @click="game.leave()">返回大厅</button>
           </div>
         </div>
@@ -408,6 +419,7 @@ const quickChats = ['👍', '🔥', '😭', '碰不动了~', '血战到底!', '�
 .btn.icon { padding: 8px 12px; font-size: 16px; border-radius: 12px; }
 .btn.icon.on { border-color: rgba(53, 224, 255, 0.6); box-shadow: 0 0 12px rgba(53, 224, 255, 0.25); }
 .chip.code { cursor: pointer; font-family: ui-monospace, monospace; font-weight: 700; color: var(--cyan); }
+.chip.watch { color: var(--violet, #8b7bff); border-color: rgba(139, 123, 255, 0.45); }
 
 .plate {
   position: absolute; z-index: 5; display: flex; align-items: center; gap: 10px;

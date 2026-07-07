@@ -14,7 +14,7 @@ router = APIRouter()
 
 class ConnectionManager:
     def __init__(self):
-        self.conns: dict[int, tuple[WebSocket, asyncio.Queue, asyncio.Task]] = {}
+        self.conns: dict[int, tuple[WebSocket, asyncio.Queue, asyncio.Task, asyncio.AbstractEventLoop]] = {}
 
     def attach(self, uid: int, ws: WebSocket):
         old = self.conns.pop(uid, None)
@@ -22,8 +22,9 @@ class ConnectionManager:
             old[2].cancel()
             asyncio.get_running_loop().create_task(self._close_quiet(old[0]))
         q: asyncio.Queue = asyncio.Queue()
-        task = asyncio.get_running_loop().create_task(self._sender(ws, q))
-        self.conns[uid] = (ws, q, task)
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(self._sender(ws, q))
+        self.conns[uid] = (ws, q, task, loop)
 
     async def _close_quiet(self, ws: WebSocket):
         try:
@@ -48,8 +49,17 @@ class ConnectionManager:
 
     def send(self, uid: int, msg: dict):
         cur = self.conns.get(uid)
-        if cur:
-            cur[1].put_nowait(msg)
+        if not cur:
+            return
+        _, q, _, loop = cur
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            q.put_nowait(msg)
+        else:  # 跨事件循环(TestClient 多连接场景)必须线程安全投递
+            loop.call_soon_threadsafe(q.put_nowait, msg)
 
 
 conn_mgr = ConnectionManager()
@@ -62,7 +72,7 @@ def _handle(uid: int, msg: dict):
         conn_mgr.send(uid, {"t": "PONG"})
         return
     room = manager.room_of(uid)
-    if t in ("QUICK", "CREATE", "JOIN"):
+    if t in ("QUICK", "CREATE", "JOIN", "WATCH"):
         user = db.get_user(uid)
         if not user:
             raise ValueError("账号不存在")
@@ -71,6 +81,8 @@ def _handle(uid: int, msg: dict):
             manager.quick_match(user, game=game)
         elif t == "CREATE":
             manager.create(user, private=bool(msg.get("private")), game=game)
+        elif t == "WATCH":
+            manager.watch(user, str(msg.get("code", "")).strip())
         else:
             code = str(msg.get("code", "")).strip()
             manager.join_code(user, code)
@@ -164,3 +176,5 @@ async def ws_endpoint(ws: WebSocket):
             room = manager.room_of(uid)
             if room:
                 room.on_disconnect(uid)
+            else:
+                manager.unwatch(uid)

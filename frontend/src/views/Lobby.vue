@@ -41,6 +41,7 @@ function joinByCode() {
   game.join(code)
 }
 function joinRoom(code) { sfx.click(); game.join(code) }
+function watchRoom(code) { sfx.click(); game.watch(code) }
 function logout() {
   socket.close()
   user.logout()
@@ -133,6 +134,7 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将' }
             <span class="chip">{{ phaseLabel[r.phase] || r.phase }}</span>
             <button class="btn joinbtn" :disabled="r.phase !== 'waiting' || !r.seats_free"
                     @click="joinRoom(r.code)">加入</button>
+            <button class="btn joinbtn" @click="watchRoom(r.code)">👁 观战</button>
           </div>
         </section>
 

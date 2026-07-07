@@ -47,6 +47,7 @@ class Room:
         self.game = game
         self.nseats = SEATS_OF[game]
         self.seats: list[Seat | None] = [None] * self.nseats
+        self.spectators: dict[int, dict] = {}  # uid → {nickname, avatar}
         self.match: DdzMatch | MahjongMatch | None = None
         self.version = 0
         self.turn_deadline: float | None = None
@@ -612,6 +613,8 @@ class Room:
             "code": self.code, "private": self.private, "phase": self.phase,
             "game": self.game, "owner": self.owner_id, "seats": seats,
             "my_seat": my_seat, "deadline": self.turn_deadline,
+            "spectator": my_seat is None and uid in self.spectators,
+            "watchers": len(self.spectators),
         }
         if self.game == "ddz":
             st.update({
@@ -675,6 +678,7 @@ class RoomManager:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
         self.user_room: dict[int, str] = {}
+        self.user_watch: dict[int, str] = {}  # 观战者 uid → 房号
         self.send_fn = None  # ws 层注入: send_fn(uid, msg_dict)
 
     # ---------- 房间生命周期 ----------
@@ -718,11 +722,29 @@ class RoomManager:
                 return room
         return self.create(user, private=False, game=game)
 
+    def watch(self, user: dict, code: str) -> Room:
+        room = self.rooms.get(code)
+        if not room:
+            raise ValueError("房间不存在或已解散")
+        self._leave_current(user["id"])
+        room.spectators[user["id"]] = {"nickname": user["nickname"], "avatar": user["avatar"]}
+        self.user_watch[user["id"]] = code
+        if self.send_fn:
+            self.send_fn(user["id"], {"t": "STATE", "state": room.snapshot(user["id"])})
+        return room
+
+    def unwatch(self, uid: int):
+        code = self.user_watch.pop(uid, None)
+        room = self.rooms.get(code) if code else None
+        if room:
+            room.spectators.pop(uid, None)
+
     def _leave_current(self, uid: int):
         room = self.room_of(uid)
         if room:
             room.leave(uid)
         self.user_room.pop(uid, None)
+        self.unwatch(uid)
 
     def leave(self, uid: int):
         self._leave_current(uid)
@@ -733,6 +755,11 @@ class RoomManager:
             for uid, c in list(self.user_room.items()):
                 if c == code:
                     self.user_room.pop(uid, None)
+            for uid, c in list(self.user_watch.items()):
+                if c == code:
+                    self.user_watch.pop(uid, None)
+                    if self.send_fn:
+                        self.send_fn(uid, {"t": "STATE", "state": None})
 
     def list_public(self) -> list[dict]:
         return [r.summary() for r in self.rooms.values() if not r.private]
@@ -745,6 +772,8 @@ class RoomManager:
         for s in room.seats:
             if s and not s.is_bot and s.connected:
                 self.send_fn(s.user_id, {"t": "EVENT", "e": e})
+        for uid in room.spectators:
+            self.send_fn(uid, {"t": "EVENT", "e": e})
 
     def push_state(self, room: Room):
         if not self.send_fn:
@@ -752,6 +781,8 @@ class RoomManager:
         for s in room.seats:
             if s and not s.is_bot and s.connected:
                 self.send_fn(s.user_id, {"t": "STATE", "state": room.snapshot(s.user_id)})
+        for uid in room.spectators:
+            self.send_fn(uid, {"t": "STATE", "state": room.snapshot(uid)})
 
 
 manager = RoomManager()

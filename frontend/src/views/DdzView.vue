@@ -23,12 +23,14 @@ const phase = computed(() => room.value?.phase)
 const myTurn = computed(() => room.value && room.value.current === mySeat.value && mySeat.value !== null)
 const me = computed(() => (mySeat.value !== null && room.value) ? room.value.seats[mySeat.value] : null)
 
-const relOf = (seat) => (seat - mySeat.value + 3) % 3
+const isWatcher = computed(() => !!room.value?.spectator)
+const anchorSeat = computed(() => mySeat.value ?? 0)  // 观战以 0 号位为视角
+const relOf = (seat) => (seat - anchorSeat.value + 3) % 3
 const seatAtRel = (rel) => {
-  if (mySeat.value === null || !room.value) return null
-  return room.value.seats[(mySeat.value + rel) % 3]
+  if (!room.value) return null
+  return room.value.seats[(anchorSeat.value + rel) % 3]
 }
-const seatNoAtRel = (rel) => (mySeat.value + rel) % 3
+const seatNoAtRel = (rel) => (anchorSeat.value + rel) % 3
 
 const countdown = computed(() => {
   if (!room.value?.deadline) return null
@@ -210,6 +212,8 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
         <button class="btn icon" @click="backLobby" title="离开房间">←</button>
         <button class="chip code" @click="copyCode">🏠 {{ room.code }} ⧉</button>
         <span class="chip" v-if="room.base">底分 {{ room.base }} · ×{{ multiplier }}<template v-if="room.bombs"> 💣{{ room.bombs }}</template></span>
+        <span v-if="isWatcher" class="chip watch">👁 观战中</span>
+        <span v-else-if="room.watchers" class="chip">👁 {{ room.watchers }}</span>
       </div>
       <div class="right-c">
         <button class="btn icon" @click="doMute" :title="muted ? '开声音' : '静音'">{{ muted ? '🔇' : '🔊' }}</button>
@@ -267,25 +271,28 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
           <template v-else><span class="wav dim">➕</span><span class="dim">空位</span></template>
         </div>
       </div>
-      <div class="wbtns">
+      <div class="wbtns" v-if="!isWatcher">
         <button v-if="!me?.ready" class="btn btn-gold big" @click="game.ready(true)">✓ 准备开局</button>
         <button v-else class="btn" @click="game.ready(false)">取消准备</button>
         <button class="btn btn-ghost" @click="copyCode">邀请好友</button>
+      </div>
+      <div class="wbtns" v-else>
+        <button class="btn btn-gold big" @click="game.join(room.code)">🪑 入座对局</button>
       </div>
     </div>
 
     <!-- 底部操作区 -->
     <footer class="hud bottom">
-      <div class="my-plate" v-if="me">
-        <div class="pav big" :class="{ turn: myTurn }">
-          <span>{{ me.avatar }}</span>
-          <i v-if="me.role === 'landlord'" class="crown">👑</i>
+      <div class="my-plate" v-if="seatAtRel(0)">
+        <div class="pav big" :class="{ turn: room.current === seatNoAtRel(0) }">
+          <span>{{ seatAtRel(0).avatar }}</span>
+          <i v-if="seatAtRel(0).role === 'landlord'" class="crown">👑</i>
         </div>
         <div class="pinfo">
-          <div class="pname">{{ me.nickname }}</div>
-          <div class="pmeta"><span class="gold">💰{{ (me.coin ?? 0).toLocaleString() }}</span></div>
+          <div class="pname">{{ seatAtRel(0).nickname }}<span v-if="isWatcher" class="dim"> (视角)</span></div>
+          <div class="pmeta"><span class="gold">💰{{ (seatAtRel(0).coin ?? 0).toLocaleString() }}</span></div>
         </div>
-        <span v-if="myTurn && countdown !== null" class="cd big">{{ countdown }}</span>
+        <span v-if="room.current === seatNoAtRel(0) && countdown !== null" class="cd big">{{ countdown }}</span>
       </div>
 
       <!-- 叫分 -->
@@ -308,12 +315,12 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
         <button class="btn act btn-cyan" @click="game.setAuto(false)">🤖 托管中,点击接管</button>
       </div>
 
-      <div v-else-if="(phase === 'playing' || phase === 'calling') && !myTurn" class="actions dim-hint">
+      <div v-else-if="(phase === 'playing' || phase === 'calling') && !myTurn && !isWatcher" class="actions dim-hint">
         等待 {{ room.seats[room.current]?.nickname ?? '' }} 操作…
       </div>
 
       <!-- 快捷聊天 -->
-      <div class="chatbar" v-if="phase !== 'waiting'">
+      <div class="chatbar" v-if="phase !== 'waiting' && !isWatcher">
         <button v-for="c in quickChats" :key="c" class="chatchip" @click="game.chat(c)">{{ c }}</button>
       </div>
     </footer>
@@ -322,8 +329,8 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
     <transition name="fade">
       <div v-if="showSettle && settle" class="modal-mask">
         <div class="settle glass">
-          <h2 :class="settle.coin_deltas[mySeat] >= 0 ? 'winh' : 'loseh'">
-            {{ settle.coin_deltas[mySeat] >= 0 ? '🏆 胜利!' : '💔 惜败' }}
+          <h2 :class="isWatcher || settle.coin_deltas[mySeat] >= 0 ? 'winh' : 'loseh'">
+            {{ isWatcher ? '🏁 本局结束' : settle.coin_deltas[mySeat] >= 0 ? '🏆 胜利!' : '💔 惜败' }}
           </h2>
           <div class="badges">
             <span class="chip">{{ roleLabel[settle.winner_role] }}赢</span>
@@ -341,7 +348,11 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
               </span>
             </div>
           </div>
-          <div class="sbtns">
+          <div class="sbtns" v-if="isWatcher">
+            <button class="btn btn-gold" @click="showSettle = false">继续观战</button>
+            <button class="btn btn-ghost" @click="backLobby">返回大厅</button>
+          </div>
+          <div class="sbtns" v-else>
             <button v-if="!me?.ready" class="btn btn-gold big" @click="nextRound">🔄 再来一局</button>
             <button v-else class="btn" disabled>等待其他玩家…</button>
             <button class="btn btn-ghost" @click="backLobby">返回大厅</button>
@@ -365,6 +376,7 @@ const roleLabel = { landlord: '地主', farmer: '农民' }
 .btn.icon { padding: 8px 12px; font-size: 16px; border-radius: 12px; }
 .btn.icon.on { border-color: rgba(53, 224, 255, 0.6); box-shadow: 0 0 12px rgba(53, 224, 255, 0.25); }
 .chip.code { cursor: pointer; font-family: ui-monospace, monospace; font-weight: 700; color: var(--cyan); }
+.chip.watch { color: #b9adff; border-color: rgba(139, 123, 255, 0.45); }
 
 /* 座位牌 */
 .plate {

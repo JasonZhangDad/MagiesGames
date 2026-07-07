@@ -44,6 +44,7 @@ export const useGameStore = defineStore('game', {
     quick(game = 'ddz') { this.send({ t: 'QUICK', game }) },
     create(priv, game = 'ddz') { this.send({ t: 'CREATE', private: priv, game }) },
     join(code) { this.send({ t: 'JOIN', code }) },
+    watch(code) { this.send({ t: 'WATCH', code }) },
     leave() { this.send({ t: 'LEAVE' }); this.selected = [] },
     ready(v = true) { this.send({ t: 'READY', ready: v }) },
     call(score) { this.send({ t: 'CALL', score }) },
