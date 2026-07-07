@@ -4,11 +4,13 @@ import tempfile
 
 os.environ.setdefault("MAGIES_FAST", "1")
 os.environ.setdefault("MAGIES_DATA", tempfile.mkdtemp(prefix="magies-test-"))
-os.environ.setdefault("MAGIES_ADMIN_KEY", "test-admin-key")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app import config  # noqa: E402
 from app.main import app  # noqa: E402
+
+config.ADMIN_KEY = "test-admin-key"  # 全套测试共进程,env 可能已被先导入者冻结
 
 
 def test_admin_requires_key():

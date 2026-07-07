@@ -99,6 +99,8 @@ def _handle(uid: int, msg: dict):
     if t in ("EXCHANGE", "LACK", "DISCARD", "MJCLAIM", "ANGANG", "BUGANG", "HU") \
             and (room.game != "mahjong" or room.match is None):
         raise ValueError("当前没有进行中的麻将对局")
+    if t == "PLACE" and (room.game != "gomoku" or room.match is None):
+        raise ValueError("当前没有进行中的五子棋对局")
     if t == "READY":
         room.set_ready(uid, bool(msg.get("ready", True)))
     elif t == "CALL":
@@ -138,6 +140,9 @@ def _handle(uid: int, msg: dict):
         room.do_bugang(seat, int(msg.get("kind", -1)))
     elif t == "HU":
         room.do_hu(seat)
+    # ---- 五子棋 ----
+    elif t == "PLACE":
+        room.do_place(seat, int(msg.get("x", -1)), int(msg.get("y", -1)))
 
 
 @router.websocket("/ws")

@@ -48,12 +48,12 @@ function logout() {
   router.push({ name: 'landing' })
 }
 
-const comingSoon = [
-  { icon: '⚫', name: '五子棋', tag: 'V1.5' },
-  { icon: '♟️', name: '中国象棋', tag: 'V2.0' },
-]
-const phaseLabel = { waiting: '等待中', calling: '叫分中', dingque: '定缺中', playing: '对局中', settled: '已结算' }
-const gameLabel = { ddz: '斗地主', mahjong: '麻将' }
+const comingSoon = []
+const phaseLabel = {
+  waiting: '等待中', calling: '叫分中', exchange: '换三张', dingque: '定缺中',
+  playing: '对局中', settled: '已结算',
+}
+const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xiangqi: '象棋' }
 </script>
 
 <template>
@@ -119,6 +119,23 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将' }
         </div>
       </section>
 
+      <!-- 五子棋 -->
+      <section class="hero-card gmk glass">
+        <div class="hero-left">
+          <div class="game-badge gmkb">⚫ 对弈 · 2 人局</div>
+          <h2 class="game-name title-grad">3D 五子棋</h2>
+          <p class="game-desc">黑先白后 · 连五即胜<br />悬停预览落点,快节奏对弈</p>
+          <div class="hero-btns">
+            <button class="btn btn-gold big" @click="quick('gomoku')">⚡ 快速匹配</button>
+            <button class="btn btn-cyan" @click="create(false, 'gomoku')">创建房间</button>
+            <button class="btn btn-cyan" @click="create(true, 'gomoku')">好友私密房</button>
+          </div>
+        </div>
+        <div class="hero-cards" aria-hidden="true">
+          <span class="fc fc1">⚫</span><span class="fc fc2">⚪</span><span class="fc fc3">⚫</span>
+        </div>
+      </section>
+
       <div class="grid">
         <!-- 房间列表 -->
         <section class="panel glass">
@@ -151,7 +168,7 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将' }
         </section>
 
         <!-- 敬请期待 -->
-        <section class="panel glass">
+        <section class="panel glass" v-if="comingSoon.length">
           <h3>🚀 更多游戏</h3>
           <div class="soon-grid">
             <div v-for="g in comingSoon" :key="g.name" class="soon-card">
@@ -204,6 +221,11 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将' }
   border-color: rgba(61, 220, 151, 0.25);
 }
 .game-badge.mjb { color: var(--green); }
+.hero-card.gmk {
+  background: linear-gradient(120deg, rgba(139, 123, 255, 0.10), rgba(53, 224, 255, 0.06) 55%, rgba(255, 107, 157, 0.08));
+  border-color: rgba(139, 123, 255, 0.3);
+}
+.game-badge.gmkb { color: #b9adff; }
 .game-name { font-size: clamp(34px, 6vw, 52px); font-weight: 900; letter-spacing: 3px; }
 .game-desc { color: var(--text-1); margin: 10px 0 18px; line-height: 1.7; font-size: 14px; }
 .hero-btns { display: flex; flex-wrap: wrap; gap: 10px; }

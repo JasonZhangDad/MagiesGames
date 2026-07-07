@@ -66,5 +66,7 @@ export const useGameStore = defineStore('game', {
     angang(kind) { this.send({ t: 'ANGANG', kind }) },
     bugang(kind) { this.send({ t: 'BUGANG', kind }) },
     huSelf() { this.send({ t: 'HU' }) },
+    // ---- 五子棋 ----
+    place(x, y) { this.send({ t: 'PLACE', x, y }) },
   },
 })

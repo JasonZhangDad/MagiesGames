@@ -12,12 +12,14 @@ from .game.ai import choose_action, choose_call
 from .game.ai import hint as ai_hint
 from .game.cards import rank_of
 from .game.engine import DdzMatch
+from .game.gomoku import ai as gmk_ai
+from .game.gomoku.engine import GomokuMatch
 from .game.mahjong import ai as mj_ai
 from .game.mahjong.engine import MahjongMatch
 from .game.mahjong.tiles import kind_label, kind_of
 from .game.patterns import KIND_LABEL
 
-SEATS_OF = {"ddz": 3, "mahjong": 4}
+SEATS_OF = {"ddz": 3, "mahjong": 4, "gomoku": 2}
 
 BOT_NAMES = ["AI·星尘", "AI·闪电", "AI·大圣", "AI·夜枭", "AI·白泽", "AI·青鸾", "AI·墨影", "AI·雷酱"]
 BOT_AVATARS = ["🤖", "👾", "🛸", "🎯"]
@@ -140,6 +142,12 @@ class Room:
             return
         if not any(s and s.ready and not s.is_bot for s in self.seats):
             return
+        # 断线且未准备的玩家不该卡住整桌:清位后由 AI 补上
+        for i, s in enumerate(self.seats):
+            if s and not s.is_bot and not s.connected and not s.ready:
+                self.manager.user_room.pop(s.user_id, None)
+                self.seats[i] = None
+                self.event({"e": "leave", "seat": i})
         names = [n for n in BOT_NAMES if all(not s or s.nickname != n for s in self.seats)]
         random.shuffle(names)
         filled = False
@@ -161,6 +169,8 @@ class Room:
     def start_match(self):
         if self.game == "ddz":
             self.match = DdzMatch(first_seat=random.randrange(3))
+        elif self.game == "gomoku":
+            self.match = GomokuMatch(first=random.randrange(2))
         else:
             self.match = MahjongMatch(dealer=random.randrange(4), exchange=True)
         self.started_at = time.time()
@@ -181,11 +191,11 @@ class Room:
         if not m or m.phase in ("settled",) or self.phase == "waiting":
             self.turn_deadline = None
             return
-        if self.game == "ddz":
-            limit = config.CALL_TIMEOUT if m.phase == "calling" else config.PLAY_TIMEOUT
-        elif m.phase in ("exchange", "dingque"):
+        if self.game == "ddz" and m.phase == "calling":
+            limit = config.CALL_TIMEOUT
+        elif self.game == "mahjong" and m.phase in ("exchange", "dingque"):
             limit = config.LACK_TIMEOUT
-        elif m.claiming:
+        elif self.game == "mahjong" and m.claiming:
             limit = config.CLAIM_TIMEOUT
         else:
             limit = config.PLAY_TIMEOUT
@@ -270,6 +280,10 @@ class Room:
         try:
             if self.game == "mahjong":
                 self._act_ai_mj(seat_no)
+            elif self.game == "gomoku":
+                if m.phase == "playing" and m.current == seat_no:
+                    x, y = gmk_ai.choose_move(m, seat_no)
+                    self.do_place(seat_no, x, y)
             elif m.phase == "calling":
                 zeros = sum(1 for c in m.calls if c == 0)
                 must = m.redeal_count >= 1 and zeros == 2
@@ -352,6 +366,59 @@ class Room:
         self._arm_turn()
         self.broadcast()
         self.drive()
+
+    # ---------- 五子棋动作(人类与 AI 共用) ----------
+
+    def do_place(self, seat_no: int, x: int, y: int):
+        m = self.match
+        m.place(seat_no, x, y)
+        self.version += 1
+        self.event({"e": "place", "seat": seat_no, "x": x, "y": y})
+        if m.phase == "settled":
+            self._on_settle_gmk()
+        else:
+            self._arm_turn()
+        self.broadcast()
+        self.drive()
+
+    def _gmk_result(self) -> dict:
+        r = self.match.result
+        return {**r, "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]]}
+
+    def _on_settle_gmk(self):
+        m = self.match
+        r = m.result
+        self.turn_deadline = None
+        players = []
+        for i, s in enumerate(self.seats):
+            role = "draw" if r["winner_seat"] is None else \
+                ("winner" if r["winner_seat"] == i else "loser")
+            players.append({
+                "user_id": s.user_id, "nickname": s.nickname, "is_bot": s.is_bot,
+                "seat_no": i, "role": role,
+                "delta_coin": r["deltas"][i] * config.COIN_UNIT, "delta_rank": r["deltas"][i],
+            })
+        db.record_match(self.code, self.started_at or time.time(), {
+            "base": 1, "multiplier": 1,
+            "winner_role": "draw" if r["winner_seat"] is None else "winner",
+            "spring": False, "bombs": 0,
+        }, players, m.history, game_type="gomoku")
+        for i, s in enumerate(self.seats):
+            if s.is_bot:
+                s.coin = max(0, s.coin + r["deltas"][i] * config.COIN_UNIT)
+                s.ready = True
+            else:
+                u = db.get_user(s.user_id)
+                if u:
+                    s.coin = u["coin"]
+                s.ready = False
+                s.auto = False
+        self.event({"e": "gmk_settle", "result": self._gmk_result()})
+        for i, s in enumerate(self.seats):
+            if s and not s.is_bot and not s.connected:
+                self.seats[i] = None
+        if not self.humans():
+            self._close()
 
     # ---------- 麻将动作(人类与 AI 共用) ----------
 
@@ -581,6 +648,8 @@ class Room:
         if self.game == "mahjong":
             _, arg = mj_ai.choose_self_action(self.match, i)
             return [arg] if isinstance(arg, int) else None
+        if self.game == "gomoku":
+            return list(gmk_ai.choose_move(self.match, i))
         return ai_hint(self.match, i)
 
     def snapshot(self, uid: int | None) -> dict:
@@ -594,12 +663,14 @@ class Room:
             entry = {
                 "seat": i, "nickname": s.nickname, "avatar": s.avatar, "coin": s.coin,
                 "bot": s.is_bot, "ready": s.ready, "connected": s.connected, "auto": s.auto,
-                "cards_left": len(m.hands[i]) if m else 0,
+                "cards_left": len(m.hands[i]) if m and hasattr(m, "hands") else 0,
                 "bubble": s.last_bubble,
             }
             if self.game == "ddz":
                 entry["call"] = m.calls[i] if m and m.phase == "calling" else None
                 entry["role"] = m.role_of(i) if m and m.landlord is not None else None
+            elif self.game == "gomoku":
+                entry["stone"] = ("black" if m.first == i else "white") if m else None
             else:
                 entry["lack"] = m.lacks[i] if m else None
                 entry["melds"] = ([{"type": x["type"], "kind": x["kind_id"],
@@ -637,6 +708,15 @@ class Room:
                                                      "bombs", "base", "multiplier", "deltas")},
                                 "coin_deltas": [d * config.COIN_UNIT for d in r["deltas"]],
                                 "hands_left": r["hands_left"]}
+        elif self.game == "gomoku":
+            st.update({
+                "current": m.current if m and m.phase == "playing" else None,
+                "board": m.board if m else None,
+                "last_move": ({"x": m.last[0], "y": m.last[1]} if m and m.last else None),
+                "first": m.first if m else None,
+            })
+            if m and m.phase == "settled" and m.result:
+                st["result"] = self._gmk_result()
         else:
             st.update({
                 "current": m.current if m and m.phase == "playing" else None,
