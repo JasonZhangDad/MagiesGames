@@ -20,6 +20,24 @@ else:
 FAST = os.environ.get("MAGIES_FAST") == "1"
 ADMIN_KEY = os.environ.get("MAGIES_ADMIN_KEY", "")  # 为空则后台统计接口关闭
 
+
+def _parse_arcade(raw: str) -> list[dict]:
+    """"name=url,name=url" → [{"name":..., "url":...}]。"""
+    out = []
+    for part in raw.split(","):
+        name, _, url = part.strip().partition("=")
+        if name and url:
+            out.append({"name": name, "url": url})
+    return out
+
+
+# 街机游戏服务探活目标;Docker 部署时用服务名覆盖(见 docker-compose.yml)
+ARCADE_SERVICES = _parse_arcade(os.environ.get(
+    "MAGIES_ARCADE",
+    "bumper-cars=http://127.0.0.1:3001,neon-fps=http://127.0.0.1:3002,"
+    "ice-climber=http://127.0.0.1:3003,arena-brawl=http://127.0.0.1:3004,"
+    "bomb-party=http://127.0.0.1:3005"))
+
 CALL_TIMEOUT = 0.5 if FAST else 20.0      # 叫分限时
 PLAY_TIMEOUT = 0.5 if FAST else 30.0      # 出牌限时
 LACK_TIMEOUT = 0.5 if FAST else 12.0      # 麻将定缺限时

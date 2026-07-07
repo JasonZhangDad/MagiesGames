@@ -7,6 +7,15 @@ import { useGameStore } from '../stores/game'
 import { useUserStore } from '../stores/user'
 import { socket } from '../ws'
 
+// 街机游戏配置
+const ARCADE_GAMES = [
+  { slug: 'bumper-cars', name: '疯狂碰碰车', icon: '🚗', desc: '横冲直撞物理竞速', tag: '多人', color: '#ffc83c', bg: 'rgba(255,200,60,0.08)', border: 'rgba(255,200,60,0.25)' },
+  { slug: 'neon-fps',    name: '霓虹竞技场', icon: '🔫', desc: '3D第一人称射击',   tag: '多人', color: '#35e0ff', bg: 'rgba(53,224,255,0.08)',  border: 'rgba(53,224,255,0.25)' },
+  { slug: 'ice-climber', name: '敲冰块大逃杀',icon: '🧊', desc: '多人平台生存竞技', tag: '多人', color: '#7ad4ff', bg: 'rgba(100,200,255,0.08)', border: 'rgba(100,200,255,0.25)' },
+  { slug: 'arena-brawl', name: '2D卡通大乱斗',icon: '⚔️', desc: '卡通混战竞技',    tag: '多人', color: '#ff6b9d', bg: 'rgba(255,107,157,0.08)', border: 'rgba(255,107,157,0.25)' },
+  { slug: 'bomb-party',  name: 'Q版炸弹人',  icon: '💣', desc: '炸弹迷宫经典玩法', tag: '多人', color: '#a78bff', bg: 'rgba(139,123,255,0.08)', border: 'rgba(139,123,255,0.25)' },
+]
+
 const router = useRouter()
 
 const user = useUserStore()
@@ -46,6 +55,10 @@ function logout() {
   socket.close()
   user.logout()
   router.push({ name: 'landing' })
+}
+function openArcade(slug) {
+  sfx.click()
+  router.push({ name: 'arcade', params: { game: slug } })
 }
 
 const comingSoon = []
@@ -133,6 +146,47 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
         </div>
         <div class="hero-cards" aria-hidden="true">
           <span class="fc fc1">⚫</span><span class="fc fc2">⚪</span><span class="fc fc3">⚫</span>
+        </div>
+      </section>
+
+      <!-- 中国象棋 -->
+      <section class="hero-card xq glass">
+        <div class="hero-left">
+          <div class="game-badge xqb">♟ 对弈 · 2 人局</div>
+          <h2 class="game-name title-grad">3D 中国象棋</h2>
+          <p class="game-desc">楚河汉界 · 红先黑后<br />绝杀困毙皆负,经典博弈</p>
+          <div class="hero-btns">
+            <button class="btn btn-gold big" @click="quick('xiangqi')">⚡ 快速匹配</button>
+            <button class="btn btn-cyan" @click="create(false, 'xiangqi')">创建房间</button>
+            <button class="btn btn-cyan" @click="create(true, 'xiangqi')">好友私密房</button>
+          </div>
+        </div>
+        <div class="hero-cards" aria-hidden="true">
+          <span class="fc fc1">帅</span><span class="fc fc2">馬</span><span class="fc fc3">將</span>
+        </div>
+      </section>
+
+      <!-- 街机游戏区 -->
+      <section class="arcade-section">
+        <div class="arcade-header">
+          <h3 class="arcade-title">🕹️ 街机游戏</h3>
+          <span class="arcade-sub">登录即玩 · 零门槛多人游戏</span>
+        </div>
+        <div class="arcade-grid">
+          <div
+            v-for="g in ARCADE_GAMES" :key="g.slug"
+            class="arcade-card glass"
+            :style="{ background: g.bg, borderColor: g.border }"
+            @click="openArcade(g.slug)"
+          >
+            <div class="ac-icon">{{ g.icon }}</div>
+            <div class="ac-info">
+              <div class="ac-name" :style="{ color: g.color }">{{ g.name }}</div>
+              <div class="ac-desc">{{ g.desc }}</div>
+            </div>
+            <span class="ac-tag" :style="{ color: g.color, borderColor: g.border }">{{ g.tag }}</span>
+            <div class="ac-arrow">▶</div>
+          </div>
         </div>
       </section>
 
@@ -226,6 +280,11 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
   border-color: rgba(139, 123, 255, 0.3);
 }
 .game-badge.gmkb { color: #b9adff; }
+.hero-card.xq {
+  background: linear-gradient(120deg, rgba(255, 107, 107, 0.10), rgba(245, 193, 69, 0.06) 55%, rgba(53, 224, 255, 0.07));
+  border-color: rgba(255, 107, 107, 0.3);
+}
+.game-badge.xqb { color: #ff9d8a; }
 .game-name { font-size: clamp(34px, 6vw, 52px); font-weight: 900; letter-spacing: 3px; }
 .game-desc { color: var(--text-1); margin: 10px 0 18px; line-height: 1.7; font-size: 14px; }
 .hero-btns { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -236,6 +295,38 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
 .fc1 { right: 90px; top: 6px; transform: rotate(-14deg); animation: float-y 4.5s ease-in-out infinite; }
 .fc2 { right: 45px; top: -4px; transform: rotate(2deg); animation: float-y 5s 0.4s ease-in-out infinite; }
 .fc3 { right: 0; top: 8px; transform: rotate(15deg); animation: float-y 5.5s 0.8s ease-in-out infinite; }
+
+/* 街机游戏区 */
+.arcade-section { margin-bottom: 20px; }
+.arcade-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.arcade-title { font-size: 15px; margin: 0; letter-spacing: 1px; }
+.arcade-sub { font-size: 12px; color: #5c6b93; }
+.arcade-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.arcade-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: transform 0.18s, box-shadow 0.18s;
+  border-width: 1px;
+  border-style: solid;
+}
+.arcade-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+}
+.ac-icon { font-size: 28px; flex-shrink: 0; }
+.ac-info { flex: 1; min-width: 0; }
+.ac-name { font-weight: 800; font-size: 13px; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-desc { font-size: 11px; color: #5c6b93; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-tag { font-size: 10px; border: 1px solid; border-radius: 999px; padding: 1px 7px; flex-shrink: 0; }
+.ac-arrow { font-size: 11px; color: rgba(160,190,255,0.4); flex-shrink: 0; }
 
 .grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 16px; }
 .panel { padding: 18px; min-height: 200px; }
@@ -272,5 +363,9 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
   .grid { grid-template-columns: 1fr; }
   .hero-cards { display: none; }
   .hero-card { padding: 22px; }
+  .arcade-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .arcade-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -1,4 +1,6 @@
 """Magies 3D 棋牌竞技大厅 —— FastAPI 入口:REST + WebSocket。"""
+import urllib.request
+
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -85,6 +87,14 @@ def profile(uid: int):
     return {"user": user, "matches": db.recent_matches(uid)}
 
 
+def _probe(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=0.5) as resp:
+            return resp.status < 500
+    except Exception:
+        return False
+
+
 @app.get("/api/admin/stats")
 def admin_stats(key: str = ""):
     if not config.ADMIN_KEY or key != config.ADMIN_KEY:
@@ -105,6 +115,8 @@ def admin_stats(key: str = ""):
         **db.admin_stats(),
         "leaderboard": db.leaderboard(10),
         "recent": db.admin_recent_matches(20),
+        "arcade": [{"name": s["name"], "up": _probe(s["url"])}
+                   for s in config.ARCADE_SERVICES],
     }
 
 

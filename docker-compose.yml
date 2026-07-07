@@ -1,0 +1,113 @@
+# MagiesGames 全服务编排
+# 生产部署：docker compose up -d --build
+# 只启动主项目：docker compose up -d backend frontend
+# 只启动某个游戏：docker compose up -d bumper-cars
+
+services:
+
+  # ── MagiesGames 后端 (FastAPI) ────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: magies-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8102:8102"    # 保持与现有 Nginx 配置一致
+    environment:
+      - MAGIES_DATA=/app/data
+      - MAGIES_ADMIN_KEY=${MAGIES_ADMIN_KEY:-}
+      # 容器网络内用服务名探活街机游戏(供 /api/admin/stats 大屏)
+      - MAGIES_ARCADE=bumper-cars=http://bumper-cars:3000,neon-fps=http://neon-fps:3000,ice-climber=http://ice-climber:3000,arena-brawl=http://arena-brawl:3000,bomb-party=http://bomb-party:3000
+    volumes:
+      - magies_data:/app/data
+    healthcheck:
+      # 基础镜像无 curl,用 python 探活
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/api/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  # ── MagiesGames 前端 (Vue + Nginx) ────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: magies-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8101:80"      # 宿主机 8101 → 容器 80
+    depends_on:
+      - backend
+
+  # ── 街机游戏服务 ──────────────────────────────────
+
+  bumper-cars:
+    build:
+      context: ./tools/games-system-import/games/crazy-bumper-cars
+    container_name: magies-bumper-cars
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+    volumes:
+      - bumper_cars_data:/app/data
+
+  neon-fps:
+    build:
+      context: ./tools/games-system-import/games/neon-arena-fps
+    container_name: magies-neon-fps
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3000"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+    volumes:
+      - neon_fps_data:/app/data
+
+  ice-climber:
+    build:
+      context: ./tools/games-system-import/games/ice-climber-arena
+    container_name: magies-ice-climber
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:3000"
+    environment:
+      - PORT=3000
+    volumes:
+      - ice_climber_data:/app/server/data
+
+  arena-brawl:
+    build:
+      context: ./tools/games-system-import/games/arena-brawl
+    container_name: magies-arena-brawl
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3004:3000"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+    volumes:
+      - arena_brawl_data:/app/data
+
+  bomb-party:
+    build:
+      context: ./tools/games-system-import/games/bomb-party
+    container_name: magies-bomb-party
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3005:3000"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+    volumes:
+      - bomb_party_data:/app/data
+
+volumes:
+  magies_data:
+  bumper_cars_data:
+  neon_fps_data:
+  ice_climber_data:
+  arena_brawl_data:
+  bomb_party_data:

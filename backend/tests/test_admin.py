@@ -34,6 +34,19 @@ def test_admin_stats_fields_and_counts():
     assert isinstance(data["matches_by_game"], dict)
 
 
+def test_admin_stats_arcade_health():
+    """街机服务健康探测:测试环境无服务在跑,应全部 down 但字段完整。"""
+    client = TestClient(app)
+    r = client.get("/api/admin/stats?key=test-admin-key")
+    assert r.status_code == 200
+    arcade = r.json()["arcade"]
+    assert isinstance(arcade, list) and len(arcade) == 5
+    names = {s["name"] for s in arcade}
+    assert names == {"bumper-cars", "neon-fps", "ice-climber", "arena-brawl", "bomb-party"}
+    for s in arcade:
+        assert s["up"] is False  # 本测试环境未启动街机服务
+
+
 def test_admin_counts_matches_after_game():
     client = TestClient(app)
     token = client.post("/api/auth/guest", json={"nickname": "对局君"}).json()["token"]

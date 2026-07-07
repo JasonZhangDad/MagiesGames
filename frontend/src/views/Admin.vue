@@ -107,6 +107,13 @@ onBeforeUnmount(() => { clearInterval(pollTimer); clearInterval(clockTimer) })
             </table>
           </div>
 
+          <h3 class="mt">🕹️ 街机服务</h3>
+          <div class="arcade-status">
+            <span v-for="s in stats.arcade || []" :key="s.name" class="asvc" :class="{ up: s.up }">
+              <i class="adot"></i>{{ s.name }}
+            </span>
+          </div>
+
           <h3 class="mt">🀄 对局分布</h3>
           <div class="dist">
             <div v-for="(n, g) in stats.matches_by_game" :key="g" class="dist-row">
@@ -187,6 +194,16 @@ td { padding: 7px 8px; border-bottom: 1px solid rgba(160, 190, 255, 0.08); white
 td.pl { white-space: normal; min-width: 160px; font-size: 12px; color: var(--text-1); }
 .mono { font-family: ui-monospace, monospace; }
 .empty { color: #5c6b93; text-align: center; padding: 18px 0; font-size: 13px; }
+
+.arcade-status { display: flex; flex-wrap: wrap; gap: 8px; }
+.asvc {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+  padding: 5px 12px; border-radius: 999px; color: #93a3c9;
+  border: 1px solid rgba(160, 190, 255, 0.15); background: rgba(255, 92, 108, 0.06);
+}
+.asvc .adot { width: 8px; height: 8px; border-radius: 50%; background: #ff5c6c; }
+.asvc.up { color: var(--green); border-color: rgba(61, 220, 151, 0.35); background: rgba(61, 220, 151, 0.06); }
+.asvc.up .adot { background: var(--green); box-shadow: 0 0 8px rgba(61, 220, 151, 0.6); }
 
 .dist { display: flex; flex-direction: column; gap: 8px; }
 .dist-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
