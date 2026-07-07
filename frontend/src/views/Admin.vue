@@ -165,7 +165,7 @@ onBeforeUnmount(() => { clearInterval(pollTimer); clearInterval(clockTimer) })
 </template>
 
 <style scoped>
-.admin { min-height: 100%; padding: 18px 22px 30px; overflow-y: auto; }
+.admin { height: 100%; padding: 18px 22px 30px; overflow-y: auto; }
 .gate { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
 .gatebox { padding: 32px 36px; text-align: center; width: min(360px, 92vw); display: flex; flex-direction: column; gap: 12px; }
 .errmsg { color: var(--red); font-size: 13px; }

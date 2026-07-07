@@ -54,8 +54,18 @@ const GAMES = {
   },
 }
 
+// slug -> tools/dev-start.sh 里 GAME_DIR_MAP 的实际游戏目录名
+const GAME_DIR_MAP = {
+  'bumper-cars': 'crazy-bumper-cars',
+  'neon-fps': 'neon-arena-fps',
+  'ice-climber': 'ice-climber-arena',
+  'arena-brawl': 'arena-brawl',
+  'bomb-party': 'bomb-party',
+}
+
 const slug = computed(() => route.params.game)
 const gameInfo = computed(() => GAMES[slug.value] || null)
+const gameDir = computed(() => GAME_DIR_MAP[slug.value] || slug.value)
 
 // 拼接游戏 URL：同域 /arcade-proxy/<slug>/ 走 Vite 代理到游戏端口
 // 将 MagiesGames 昵称作为 URL 参数传入，游戏加载后注入脚本尝试预填
@@ -128,7 +138,7 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
       <div class="err-text">游戏服务未启动</div>
       <div class="err-sub">请先在本地启动游戏服务（端口 {{ gameInfo?.port }}）</div>
       <div class="err-cmd">
-        <code>cd tools/games-system-import/games/{{ slug }} && npm start</code>
+        <code>cd tools/games-system-import/games/{{ gameDir }} && npm start</code>
       </div>
       <button class="btn btn-gold" style="margin-top:20px" @click="goBack">返回大厅</button>
     </div>

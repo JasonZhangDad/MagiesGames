@@ -34,6 +34,7 @@ export class GameSocket {
       this.handlers[msg.t]?.(msg)
     }
     ws.onclose = (ev) => {
+      if (this.ws !== ws) return
       this.alive = false
       clearInterval(this._hb)
       if (this.closedByUser || ev.code === 4401 || ev.code === 4000) return

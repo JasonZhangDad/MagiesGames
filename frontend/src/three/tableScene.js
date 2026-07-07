@@ -113,9 +113,12 @@ export class TableScene {
     this.pointer = new THREE.Vector2()
     this._dragToggled = null
 
-    canvas.addEventListener('pointerdown', (e) => this._onPointer(e, true))
-    canvas.addEventListener('pointermove', (e) => this._onPointer(e, false))
-    addEventListener('pointerup', () => { this._dragToggled = null })
+    this._onPointerDown = (e) => this._onPointer(e, true)
+    this._onPointerMove = (e) => this._onPointer(e, false)
+    this._onPointerUp = () => { this._dragToggled = null }
+    canvas.addEventListener('pointerdown', this._onPointerDown)
+    canvas.addEventListener('pointermove', this._onPointerMove)
+    addEventListener('pointerup', this._onPointerUp)
 
     this._raf = 0
     this._clock = new THREE.Clock()
@@ -238,6 +241,7 @@ export class TableScene {
     const h = this.canvas.clientHeight
     if (!w || !h) return
     const need = this.canvas.width !== Math.floor(w * this.renderer.getPixelRatio())
+      || this.canvas.height !== Math.floor(h * this.renderer.getPixelRatio())
     const portrait = h > w
     if (need || portrait !== this.portrait) {
       this.portrait = portrait
@@ -538,6 +542,9 @@ export class TableScene {
 
   dispose() {
     cancelAnimationFrame(this._raf)
+    this.canvas.removeEventListener('pointerdown', this._onPointerDown)
+    this.canvas.removeEventListener('pointermove', this._onPointerMove)
+    removeEventListener('pointerup', this._onPointerUp)
     this.reset()
     this.cardGeo.dispose()
     this.renderer.dispose()

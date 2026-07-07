@@ -233,7 +233,9 @@ export class XiangqiScene {
     const h = this.canvas.clientHeight
     if (!w || !h) return
     const portrait = h > w
-    if (this.canvas.width !== Math.floor(w * this.renderer.getPixelRatio()) || portrait !== this.portrait) {
+    if (this.canvas.width !== Math.floor(w * this.renderer.getPixelRatio())
+      || this.canvas.height !== Math.floor(h * this.renderer.getPixelRatio())
+      || portrait !== this.portrait) {
       this.portrait = portrait
       this.renderer.setSize(w, h, false)
       this.camera.aspect = w / h
@@ -428,6 +430,7 @@ export class XiangqiScene {
 
   dispose() {
     cancelAnimationFrame(this._raf)
+    gsap.killTweensOf(this.selRing.material)
     this.reset()
     this.pieceGeo.dispose()
     this.renderer.dispose()

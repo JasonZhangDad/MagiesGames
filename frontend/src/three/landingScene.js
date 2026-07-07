@@ -58,7 +58,7 @@ export function createLandingScene(canvas) {
   function resize() {
     const w = canvas.clientWidth
     const h = canvas.clientHeight
-    if (canvas.width !== w * renderer.getPixelRatio()) {
+    if (canvas.width !== w * renderer.getPixelRatio() || canvas.height !== h * renderer.getPixelRatio()) {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
