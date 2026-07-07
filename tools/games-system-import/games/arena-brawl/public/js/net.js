@@ -11,7 +11,8 @@ const Net = (() => {
 
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}`);
+    const path = location.pathname.startsWith('/arcade/arena-brawl/') ? '/arcade/arena-brawl/' : '/';
+    ws = new WebSocket(`${proto}://${location.host}${path}`);
     ws.onopen = () => {
       onOpen();
       pingTimer = setInterval(() => send({ type: 'ping', t: Date.now() }), 1000);

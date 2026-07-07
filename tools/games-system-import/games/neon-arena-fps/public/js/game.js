@@ -119,7 +119,8 @@
 
   // ---------- 网络 ----------
   function connect() {
-    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    const path = location.pathname.startsWith('/arcade/neon-fps/') ? '/arcade/neon-fps/' : '/';
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + path;
     ws = new WebSocket(url);
     ws.onopen = () => {
       wsOk = true;
