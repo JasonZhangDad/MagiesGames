@@ -18,9 +18,16 @@ const Net = (() => {
     handlers: {}          // type -> fn，由其他模块注册
   };
 
+  function urlFor(loc) {
+    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+    const path = loc.pathname.startsWith('/arcade/bumper-cars/')
+      ? '/arcade/bumper-cars/'
+      : '/';
+    return proto + '//' + loc.host + path;
+  }
+
   function url() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return proto + '//' + location.host;
+    return urlFor(location);
   }
 
   function connect() {
@@ -110,5 +117,5 @@ const Net = (() => {
     });
   }
 
-  return { state, connect, send, on, lerpPlayers };
+  return { state, connect, send, on, lerpPlayers, __test: { urlFor } };
 })();
