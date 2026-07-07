@@ -64,6 +64,11 @@ const VIEW_W = 1600, VIEW_H = 900, VIEW_AR = VIEW_W / VIEW_H;
 const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches
   || (navigator.maxTouchPoints || 0) > 0
   || window.innerWidth <= 820;
+const MOBILE_DPR_LIMIT = 1.25;
+
+function renderDpr() {
+  return Math.min(window.devicePixelRatio || 1, IS_TOUCH ? MOBILE_DPR_LIMIT : 2);
+}
 
 function fitViewport() {
   const game = $('game');
@@ -80,7 +85,7 @@ function fitViewport() {
   $('frame').style.height = h + 'px';
   $('ui').style.setProperty('--ui-scale', w / VIEW_W);
 
-  if (renderer) renderer.resize(w, h, Math.min(2, window.devicePixelRatio || 1));
+  if (renderer) renderer.resize(w, h, renderDpr());
 
   // on a phone held upright the 16:9 frame is a thin strip — nudge to rotate
   if (IS_TOUCH) {

@@ -16,17 +16,26 @@ const Render = (() => {
   const wrecks = [];    // 死亡飞车
   const horns = new Map(); // playerId -> until
   const hitFlash = new Map(); // playerId -> time (挤压动画)
+  const MOBILE_DPR_LIMIT = 1.25;
+
+  function renderDpr() {
+    const mobile = (navigator.maxTouchPoints || 0) > 0
+      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || window.innerWidth <= 820;
+    return Math.min(window.devicePixelRatio || 1, mobile ? MOBILE_DPR_LIMIT : 2);
+  }
 
   const BOOM_WORDS = ['砰!!', '轰!!', '咣!!', 'POW!', 'BAM!', 'BOOM!'];
   const PICKUP_ICON = { wrench: '🔧', nitro: '⚡', shield: '🛡️', power: '⭐' };
 
   function resize() {
-    canvas.width = window.innerWidth * devicePixelRatio;
-    canvas.height = window.innerHeight * devicePixelRatio;
+    const dpr = renderDpr();
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
     canvas.style.width = window.innerWidth + 'px';
     canvas.style.height = window.innerHeight + 'px';
     zoom = Math.min(window.innerWidth / 1500, window.innerHeight / 950);
-    zoom = Math.max(0.55, Math.min(zoom, 1.35)) * devicePixelRatio;
+    zoom = Math.max(0.55, Math.min(zoom, 1.35)) * dpr;
   }
   window.addEventListener('resize', resize);
   resize();
@@ -592,7 +601,7 @@ const Render = (() => {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const cx = canvas.width / 2, cy = canvas.height / 2;
     ctx.strokeStyle = 'rgba(255,255,255,.16)';
-    ctx.lineWidth = 3 * devicePixelRatio;
+    ctx.lineWidth = 3 * renderDpr();
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2 + (t / 300) % 1;
       const r0 = Math.min(cx, cy) * 0.75, r1 = Math.max(cx, cy) * 1.1;

@@ -13,6 +13,7 @@ const Renderer = (() => {
   let atmosphereClock = 0;
   let nightMaskRadius = null;
   let obstacles = [];
+  const MOBILE_DPR_LIMIT = 1.25;
   const particles = [], floaters = [], rings = [], slashes = [], dashes = [];
   // hexA(hex, alpha) -> 'rgba(r,g,b,a)'. Defined near the bottom of this file
   // (alongside `hx`); the cosmetic trail below reuses it.
@@ -25,8 +26,14 @@ const Renderer = (() => {
     mm = minimapEl; mmx = mm.getContext('2d');
     window.addEventListener('resize', resize); resize();
   }
+  function renderDpr() {
+    const mobile = (navigator.maxTouchPoints || 0) > 0
+      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || window.innerWidth <= 820;
+    return Math.min(window.devicePixelRatio || 1, mobile ? MOBILE_DPR_LIMIT : 2);
+  }
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = renderDpr();
     vw = cv.clientWidth; vh = cv.clientHeight;
     cv.width = Math.floor(vw * dpr); cv.height = Math.floor(vh * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

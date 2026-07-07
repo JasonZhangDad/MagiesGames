@@ -17,6 +17,7 @@
       || (navigator.maxTouchPoints || 0) > 0
       || innerWidth <= 820;
   })();
+  const MOBILE_DPR_LIMIT = 1.25;
   document.body.classList.toggle('mobile', TOUCH);
   // 画质仅影响阴影分辨率/抗锯齿/像素比这类纯观感开销，绝不缩短视距/雾距——
   // 视野范围是竞技公平性的一部分，任何设备都必须能看到同样远的敌人
@@ -40,7 +41,7 @@
   // ---------- 渲染器 ----------
   const canvas = $('cv');
   const renderer = new T.WebGLRenderer({ canvas, antialias: quality.aa, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(quality.pr, window.devicePixelRatio));
+  renderer.setPixelRatio(Math.min(TOUCH ? Math.min(quality.pr, MOBILE_DPR_LIMIT) : quality.pr, window.devicePixelRatio || 1));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = quality.soft ? T.PCFSoftShadowMap : T.PCFShadowMap;
@@ -1186,16 +1187,37 @@
   $('chatInput').addEventListener('blur', () => document.body.classList.remove('chat-focus'));
 
   // 菜单按钮
-  $('nameInput').value = myName;
-  $('btnPlay').onclick = () => {
+  function bindTap(id, handler) {
+    const el = $(id);
+    let lastTapAt = 0;
+    const run = (e) => {
+      const t = performance.now ? performance.now() : Date.now();
+      if (t - lastTapAt < 350) {
+        if (e) e.preventDefault();
+        return;
+      }
+      lastTapAt = t;
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      handler();
+    };
+    el.addEventListener('click', run);
+    el.addEventListener('touchend', (e) => { if (TOUCH) run(e); }, { passive: false });
+    el.addEventListener('pointerup', (e) => { if (TOUCH && e.pointerType === 'touch') run(e); });
+  }
+  function joinFromMenu() {
     G.audio.init();
     myName = $('nameInput').value.trim() || ('玩家' + Math.floor(Math.random() * 900 + 100));
     $('menuErr').textContent = '';
     send({ type: 'join', name: myName });
-  };
-  $('btnSpec').onclick = () => { G.audio.init(); send({ type: 'spectate' }); };
-  $('btnDeathSpec').onclick = () => { send({ type: 'spectate' }); };
-  $('btnSpecJoin').onclick = () => joinFromSpec();
+  }
+  $('nameInput').value = myName;
+  bindTap('btnPlay', joinFromMenu);
+  bindTap('btnSpec', () => { G.audio.init(); send({ type: 'spectate' }); });
+  bindTap('btnDeathSpec', () => { send({ type: 'spectate' }); });
+  bindTap('btnSpecJoin', () => joinFromSpec());
   $('nameInput').addEventListener('keydown', e => { if (e.code === 'Enter') $('btnPlay').click(); e.stopPropagation(); });
   function joinFromSpec() {
     myName = myName || $('nameInput').value.trim() || ('玩家' + Math.floor(Math.random() * 900 + 100));

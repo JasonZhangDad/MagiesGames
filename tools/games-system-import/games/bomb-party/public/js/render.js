@@ -17,12 +17,20 @@ window.Renderer = (function () {
     { icon: 'speed', color: '#ffb800' },
     { icon: 'shield', color: '#39c5e8' },
   ];
+  const MOBILE_DPR_LIMIT = 1.25;
+
+  function renderDpr() {
+    const mobile = (navigator.maxTouchPoints || 0) > 0
+      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || window.innerWidth <= 820;
+    return Math.min(window.devicePixelRatio || 1, mobile ? MOBILE_DPR_LIMIT : 2);
+  }
 
   function create(canvas, minimapCanvas, cols, rows, tileSize) {
     const ctx = canvas.getContext('2d');
     const mctx = minimapCanvas.getContext('2d');
     const TS = tileSize || 48;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = renderDpr();
 
     let viewW = 800, viewH = 600; // CSS 像素
     const cam = { x: (cols * TS) / 2, y: (rows * TS) / 2 }; // 世界像素，视口中心

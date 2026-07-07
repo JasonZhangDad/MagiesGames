@@ -148,6 +148,8 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
 
 <style scoped>
 .arcade-wrap {
+  --arcade-bar-core: 48px;
+  --arcade-bar-height: calc(var(--arcade-bar-core) + var(--safe-t));
   position: fixed;
   inset: 0;
   display: flex;
@@ -158,12 +160,13 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
 
 /* 顶部工具栏 */
 .arcade-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 16px;
-  height: 48px;
-  min-height: 48px;
+  padding: var(--safe-t) 16px 0;
+  height: var(--arcade-bar-height);
+  min-height: var(--arcade-bar-height);
   background: rgba(8, 13, 30, 0.95);
   border-bottom: 1px solid rgba(160, 190, 255, 0.12);
   backdrop-filter: blur(12px);
@@ -220,7 +223,7 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
 /* 加载遮罩 */
 .loading-mask {
   position: absolute;
-  inset: 48px 0 0 0;
+  inset: var(--arcade-bar-height) 0 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -243,7 +246,7 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
 /* 错误/不存在 */
 .center-msg {
   position: absolute;
-  inset: 48px 0 0 0;
+  inset: var(--arcade-bar-height) 0 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -265,5 +268,13 @@ onBeforeUnmount(() => { document.body.style.overflow = '' })
   font-family: ui-monospace, monospace;
   font-size: 13px;
   color: #35e0ff;
+}
+
+@media (max-width: 680px) {
+  .arcade-bar { gap: 10px; padding-left: 10px; padding-right: 10px; }
+  .back-btn { min-height: 36px; padding: 7px 10px; }
+  .game-desc, .user-badge { display: none; }
+  .game-title { min-width: 0; }
+  .game-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 </style>
