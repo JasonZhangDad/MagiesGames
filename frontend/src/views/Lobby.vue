@@ -111,7 +111,9 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
           </div>
         </div>
         <div class="hero-cards" aria-hidden="true">
-          <span class="fc fc1">🂠</span><span class="fc fc2">🃏</span><span class="fc fc3">🂡</span>
+          <span class="fc fc1 pcard back-card"><b>M</b></span>
+          <span class="fc fc2 pcard"><i class="red">♥</i><b class="red">A</b></span>
+          <span class="fc fc3 pcard"><i>♠</i><b>K</b></span>
         </div>
       </section>
 
@@ -128,7 +130,9 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
           </div>
         </div>
         <div class="hero-cards" aria-hidden="true">
-          <span class="fc fc1">🀄</span><span class="fc fc2">🀅</span><span class="fc fc3">🀆</span>
+          <span class="fc fc1 mjtile"><b class="mj-num">五</b><b class="mj-wan">萬</b></span>
+          <span class="fc fc2 mjtile"><i class="mj-coin"></i></span>
+          <span class="fc fc3 mjtile tiao"><i class="mj-bar"></i><i class="mj-bar mid"></i><i class="mj-bar"></i></span>
         </div>
       </section>
 
@@ -145,7 +149,9 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
           </div>
         </div>
         <div class="hero-cards" aria-hidden="true">
-          <span class="fc fc1">⚫</span><span class="fc fc2">⚪</span><span class="fc fc3">⚫</span>
+          <span class="fc fc1 gstone black"></span>
+          <span class="fc fc2 gstone white"></span>
+          <span class="fc fc3 gstone black"></span>
         </div>
       </section>
 
@@ -162,7 +168,9 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
           </div>
         </div>
         <div class="hero-cards" aria-hidden="true">
-          <span class="fc fc1">帅</span><span class="fc fc2">馬</span><span class="fc fc3">將</span>
+          <span class="fc fc1 xqpiece red-p">帥</span>
+          <span class="fc fc2 xqpiece">將</span>
+          <span class="fc fc3 xqpiece red-p">馬</span>
         </div>
       </section>
 
@@ -290,11 +298,62 @@ const gameLabel = { ddz: '斗地主', mahjong: '麻将', gomoku: '五子棋', xi
 .hero-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .big { font-size: 17px; padding: 14px 30px; animation: pulse-glow 2.4s ease-in-out infinite; }
 .joinrow { display: flex; gap: 10px; margin-top: 12px; max-width: 320px; }
-.hero-cards { position: relative; min-width: 150px; }
-.fc { position: absolute; font-size: 110px; filter: drop-shadow(0 12px 30px rgba(0,0,0,0.5)); }
-.fc1 { right: 90px; top: 6px; transform: rotate(-14deg); animation: float-y 4.5s ease-in-out infinite; }
-.fc2 { right: 45px; top: -4px; transform: rotate(2deg); animation: float-y 5s 0.4s ease-in-out infinite; }
-.fc3 { right: 0; top: 8px; transform: rotate(15deg); animation: float-y 5.5s 0.8s ease-in-out infinite; }
+.hero-cards { position: relative; min-width: 190px; }
+.fc { position: absolute; display: inline-flex; align-items: center; justify-content: center; }
+.fc1 { right: 118px; top: 12px; transform: rotate(-14deg); animation: float-y 4.5s ease-in-out infinite; }
+.fc2 { right: 60px; top: 0; transform: rotate(2deg); animation: float-y 5s 0.4s ease-in-out infinite; z-index: 1; }
+.fc3 { right: 4px; top: 14px; transform: rotate(15deg); animation: float-y 5.5s 0.8s ease-in-out infinite; }
+
+/* 精制装饰小件:扑克 */
+.pcard {
+  width: 78px; height: 108px; border-radius: 10px; flex-direction: column; gap: 0;
+  background: linear-gradient(160deg, #ffffff, #eef0f8);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(35, 42, 77, 0.15);
+}
+.pcard b { font-size: 42px; font-weight: 900; color: #232a4d; font-family: Georgia, serif; line-height: 1; }
+.pcard i { font-style: normal; font-size: 30px; color: #232a4d; line-height: 1.1; }
+.pcard .red { color: #e23b4e; }
+.back-card {
+  background: linear-gradient(140deg, #1b2350, #2a1f66 55%, #131a3e);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55), inset 0 0 0 3px rgba(245, 193, 69, 0.55);
+}
+.back-card b { color: #f5c145; font-size: 52px; text-shadow: 0 0 16px rgba(245, 193, 69, 0.65); }
+
+/* 精制装饰小件:麻将(万/筒/条,四川麻将无字牌) */
+.mjtile {
+  width: 78px; height: 104px; border-radius: 12px; flex-direction: column;
+  background: linear-gradient(180deg, #fdfaf0, #ece1c6);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55),
+    inset 0 -5px 9px rgba(120, 95, 45, 0.20), inset 0 2px 3px rgba(255, 255, 255, 0.95);
+}
+.mjtile.tiao { flex-direction: row; }
+.mj-num { font-size: 36px; font-weight: 900; color: #c02f2f; font-family: "Kaiti SC", "STKaiti", serif; line-height: 1.15; }
+.mj-wan { font-size: 32px; font-weight: 900; color: #23232b; font-family: "Kaiti SC", "STKaiti", serif; line-height: 1.1; }
+.mj-coin {
+  width: 48px; height: 48px; border-radius: 50%; border: 7px solid #2c4a88;
+  background: radial-gradient(circle at 36% 30%, #e05b52, #8e1f1f);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.75);
+}
+.mj-bar {
+  width: 13px; height: 54px; border-radius: 7px; margin: 0 3px;
+  background: linear-gradient(90deg, #14573a, #37a06b 40%, #37a06b 60%, #14573a);
+}
+.mj-bar.mid { background: linear-gradient(90deg, #8e1f1f, #e05b52 40%, #e05b52 60%, #8e1f1f); }
+
+/* 精制装饰小件:五子棋 */
+.gstone { width: 84px; height: 84px; border-radius: 50%; box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6); }
+.gstone.black { background: radial-gradient(circle at 34% 28%, #6a7080, #14161c 66%); }
+.gstone.white { background: radial-gradient(circle at 34% 28%, #ffffff, #cfc9b8 72%); }
+
+/* 精制装饰小件:象棋 */
+.xqpiece {
+  width: 88px; height: 88px; border-radius: 50%; color: #26221c;
+  background: radial-gradient(circle at 40% 32%, #f7ecd2, #dcc494 78%);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 4px currentColor,
+    inset 0 0 0 7px rgba(247, 236, 210, 0.95);
+  font-family: "Kaiti SC", "STKaiti", serif; font-size: 42px; font-weight: 900;
+}
+.xqpiece.red-p { color: #c22c22; }
 
 /* 街机游戏区 */
 .arcade-section { margin-bottom: 20px; }

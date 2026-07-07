@@ -8,22 +8,38 @@ const CARD_W = 1.5
 const DECK_POS = new THREE.Vector3(0, 2.2, -3.4)
 
 function feltTexture() {
+  const S = 1024
   const c = document.createElement('canvas')
-  c.width = c.height = 512
+  c.width = c.height = S
   const g = c.getContext('2d')
-  const grad = g.createRadialGradient(256, 256, 40, 256, 256, 360)
-  grad.addColorStop(0, '#14424e')
+  const grad = g.createRadialGradient(S / 2, S / 2, 80, S / 2, S / 2, S * 0.7)
+  grad.addColorStop(0, '#175061')
   grad.addColorStop(0.65, '#0d3038')
-  grad.addColorStop(1, '#081e26')
+  grad.addColorStop(1, '#071a21')
   g.fillStyle = grad
-  g.fillRect(0, 0, 512, 512)
-  g.strokeStyle = 'rgba(245, 193, 69, 0.10)'
+  g.fillRect(0, 0, S, S)
+  // 绒布纤维噪点
+  for (let i = 0; i < 2400; i++) {
+    g.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.018})`
+    g.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5)
+  }
+  // 金色同心装饰环 + 中央菱形徽记
+  g.strokeStyle = 'rgba(245, 193, 69, 0.14)'
+  g.lineWidth = 4
+  g.beginPath(); g.arc(S / 2, S / 2, 360, 0, Math.PI * 2); g.stroke()
+  g.strokeStyle = 'rgba(245, 193, 69, 0.07)'
   g.lineWidth = 2
-  g.beginPath()
-  g.arc(256, 256, 180, 0, Math.PI * 2)
-  g.stroke()
+  g.beginPath(); g.arc(S / 2, S / 2, 330, 0, Math.PI * 2); g.stroke()
+  g.save()
+  g.translate(S / 2, S / 2)
+  g.rotate(Math.PI / 4)
+  g.strokeStyle = 'rgba(245, 193, 69, 0.09)'
+  g.lineWidth = 3
+  g.strokeRect(-70, -70, 140, 140)
+  g.restore()
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
   return tex
 }
 
@@ -109,12 +125,21 @@ export class TableScene {
   // ---------- 场景搭建 ----------
 
   _buildTable() {
+    // 胡桃木立体包边 + 金色饰线,取代原来的平面金圈
     const rim = new THREE.Mesh(
-      new THREE.ShapeGeometry(roundedRectShape(17.4, 12.4, 3.4), 24),
-      new THREE.MeshBasicMaterial({ color: 0xf5c145, transparent: true, opacity: 0.32 }),
+      new THREE.ExtrudeGeometry(roundedRectShape(18.2, 13.4, 3.7), {
+        depth: 0.55, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.12, bevelSegments: 2, curveSegments: 24,
+      }),
+      new THREE.MeshStandardMaterial({ color: 0x54391f, roughness: 0.55, metalness: 0.08 }),
     )
     rim.rotation.x = -Math.PI / 2
-    rim.position.y = -0.03
+    rim.position.y = -0.62
+    const trim = new THREE.Mesh(
+      new THREE.ShapeGeometry(roundedRectShape(17.5, 12.6, 3.45), 24),
+      new THREE.MeshStandardMaterial({ color: 0xc89b3c, roughness: 0.35, metalness: 0.7 }),
+    )
+    trim.rotation.x = -Math.PI / 2
+    trim.position.y = -0.015
     const felt = new THREE.Mesh(
       normalizeUv(new THREE.ShapeGeometry(roundedRectShape(17, 12, 3.2), 24)),
       new THREE.MeshStandardMaterial({ map: feltTexture(), roughness: 0.92, metalness: 0.05 }),
@@ -126,18 +151,21 @@ export class TableScene {
     }))
     glow.scale.set(20, 12, 1)
     glow.position.y = 0.4
-    this.scene.add(rim, felt, glow)
+    this.scene.add(rim, trim, felt, glow)
   }
 
   _buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x1a2340, 1.15))
-    const key = new THREE.DirectionalLight(0xfff2d8, 1.5)
+    this.scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x1a2340, 1.1))
+    const key = new THREE.DirectionalLight(0xfff2d8, 1.6)
     key.position.set(4, 14, 6)
-    const cyan = new THREE.PointLight(0x35e0ff, 30, 30)
+    // 中央暖光让牌面更润
+    const warm = new THREE.PointLight(0xffd9a0, 10, 24)
+    warm.position.set(0, 7, 2)
+    const cyan = new THREE.PointLight(0x35e0ff, 22, 30)
     cyan.position.set(-9, 5, -4)
-    const violet = new THREE.PointLight(0x8b7bff, 26, 30)
+    const violet = new THREE.PointLight(0x8b7bff, 18, 30)
     violet.position.set(9, 5, -4)
-    this.scene.add(key, cyan, violet)
+    this.scene.add(key, warm, cyan, violet)
   }
 
   _buildStars() {

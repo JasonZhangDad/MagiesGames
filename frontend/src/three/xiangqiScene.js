@@ -85,6 +85,14 @@ function boardTexture() {
   g.restore()
   g.fillText('汉 界', px(6.4), ry)
 
+  // 清漆光泽 + 暗角
+  const sheen = g.createRadialGradient(320, 280, 60, 460, 500, 860)
+  sheen.addColorStop(0, 'rgba(255,255,255,0.10)')
+  sheen.addColorStop(0.4, 'rgba(255,255,255,0)')
+  sheen.addColorStop(1, 'rgba(30,18,4,0.22)')
+  g.fillStyle = sheen
+  g.fillRect(0, 0, 920, 1000)
+
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
@@ -146,9 +154,10 @@ export class XiangqiScene {
     this.scene.add(key, cyan, violet)
 
     this.pieceGeo = new THREE.CylinderGeometry(S * 0.42, S * 0.44, 0.24, 36)
+    // 漆器质感:上过清漆的黄杨木棋子
     this.sideMats = {
-      0: new THREE.MeshStandardMaterial({ color: 0xead7ae, roughness: 0.5 }),
-      1: new THREE.MeshStandardMaterial({ color: 0xdcc494, roughness: 0.5 }),
+      0: new THREE.MeshPhysicalMaterial({ color: 0xead7ae, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.3 }),
+      1: new THREE.MeshPhysicalMaterial({ color: 0xdcc494, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.3 }),
     }
     this.topMats = new Map()       // code → 顶面材质缓存
     this.pieceGroup = new THREE.Group()
@@ -161,6 +170,8 @@ export class XiangqiScene {
     this.markerFrom = this._ring(0xf5c145, 0.35)
     this.markerTo = this._ring(0xf5c145, 0.9)
     this.selRing = this._ring(0x3ddc97, 0.95)
+    // 选中环呼吸脉冲
+    gsap.to(this.selRing.material, { opacity: 0.5, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' })
     this.scene.add(this.markerFrom, this.markerTo, this.selRing)
 
     this.raycaster = new THREE.Raycaster()
@@ -183,7 +194,9 @@ export class XiangqiScene {
 
   _topMat(code) {
     if (!this.topMats.has(code)) {
-      this.topMats.set(code, new THREE.MeshStandardMaterial({ map: pieceTexture(code), roughness: 0.45 }))
+      this.topMats.set(code, new THREE.MeshPhysicalMaterial({
+        map: pieceTexture(code), roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.25,
+      }))
     }
     return this.topMats.get(code)
   }
@@ -289,6 +302,39 @@ export class XiangqiScene {
     const mesh = this.pieces.get(`${to[0]},${to[1]}`)
     if (mesh) this._slide(mesh, from, to)
     else this.pendingAnim = { from, to, at: Date.now() }
+  }
+
+  /** 吃子爆裂:金色碎屑四溅 */
+  captureBurst(cell) {
+    const p = this._cellPos(cell[0], cell[1])
+    const N = 26
+    const geo = new THREE.BufferGeometry()
+    const pos = new Float32Array(N * 3)
+    const vel = []
+    for (let i = 0; i < N; i++) {
+      pos.set([p.x, 0.3, p.z], i * 3)
+      vel.push(new THREE.Vector3((Math.random() - 0.5) * 4, 1.5 + Math.random() * 3, (Math.random() - 0.5) * 4))
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xf5c145, size: 0.12, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    this.fxGroup.add(pts)
+    const st = { t: 0 }
+    gsap.to(st, {
+      t: 1, duration: 0.7, ease: 'power1.out',
+      onUpdate: () => {
+        const arr = geo.attributes.position.array
+        for (let i = 0; i < N; i++) {
+          arr[i * 3] = p.x + vel[i].x * st.t
+          arr[i * 3 + 1] = 0.3 + vel[i].y * st.t - 4.5 * st.t * st.t
+          arr[i * 3 + 2] = p.z + vel[i].z * st.t
+        }
+        geo.attributes.position.needsUpdate = true
+        pts.material.opacity = 1 - st.t
+      },
+      onComplete: () => { this.fxGroup.remove(pts); geo.dispose(); pts.material.dispose() },
+    })
   }
 
   /** 选中棋子 + 可落点提示。sel = [x,y]|null,targets = [[x,y],...] */

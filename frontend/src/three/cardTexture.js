@@ -45,21 +45,79 @@ function labelOf(rank) { return RANK_LABEL[rank] || String(rank) }
 function drawJoker(g, big) {
   const color = big ? RED : BLACK
   g.fillStyle = color
-  g.font = '900 52px Georgia, serif'
+  g.font = '900 46px Georgia, serif'
   g.textAlign = 'center'
   const word = 'JOKER'
   for (let i = 0; i < word.length; i++) {
-    g.fillText(word[i], 44, 76 + i * 52)
+    g.fillText(word[i], 40, 72 + i * 48)
   }
-  // 中央星徽
-  g.save()
-  g.translate(W / 2 + 28, H / 2)
-  g.font = '110px serif'
-  g.textBaseline = 'middle'
-  g.fillText(big ? '🌞' : '🌙', 0, 6)
-  g.restore()
-  g.font = 'bold 26px Georgia, serif'
-  g.fillText(big ? '大王' : '小王', W / 2 + 28, H - 36)
+  // 中央徽记:大王手绘骄阳,小王手绘弯月(不依赖 emoji,跨平台一致)
+  const cx = W / 2 + 26
+  const cy = H / 2 - 6
+  if (big) {
+    g.save()
+    g.translate(cx, cy)
+    const glow = g.createRadialGradient(0, 0, 6, 0, 0, 62)
+    glow.addColorStop(0, '#ffdf7e')
+    glow.addColorStop(1, 'rgba(255, 190, 60, 0)')
+    g.fillStyle = glow
+    g.beginPath(); g.arc(0, 0, 62, 0, Math.PI * 2); g.fill()
+    g.fillStyle = '#f5a623'
+    for (let i = 0; i < 12; i++) {
+      g.save()
+      g.rotate((i / 12) * Math.PI * 2)
+      g.beginPath()
+      g.moveTo(0, -34); g.lineTo(7, -52); g.lineTo(-7, -52)
+      g.closePath(); g.fill()
+      g.restore()
+    }
+    const core = g.createRadialGradient(-8, -10, 4, 0, 0, 34)
+    core.addColorStop(0, '#ffe9a8')
+    core.addColorStop(1, '#f08c00')
+    g.fillStyle = core
+    g.beginPath(); g.arc(0, 0, 33, 0, Math.PI * 2); g.fill()
+    g.restore()
+  } else {
+    g.save()
+    g.translate(cx, cy)
+    const glow = g.createRadialGradient(0, 0, 8, 0, 0, 58)
+    glow.addColorStop(0, 'rgba(160, 190, 255, 0.5)')
+    glow.addColorStop(1, 'rgba(160, 190, 255, 0)')
+    g.fillStyle = glow
+    g.beginPath(); g.arc(0, 0, 58, 0, Math.PI * 2); g.fill()
+    const moon = g.createLinearGradient(-30, -30, 24, 30)
+    moon.addColorStop(0, '#dfe8ff')
+    moon.addColorStop(1, '#8fa3d8')
+    g.fillStyle = moon
+    g.beginPath()
+    g.arc(0, 0, 36, Math.PI * 0.32, Math.PI * 1.68)
+    g.arc(16, 0, 30, Math.PI * 1.6, Math.PI * 0.4, true)
+    g.closePath()
+    g.fill()
+    // 三颗小星
+    g.fillStyle = '#dfe8ff'
+    for (const [sx, sy, r] of [[26, -30, 3.4], [38, -12, 2.4], [30, 26, 2.8]]) {
+      g.beginPath(); g.arc(sx, sy, r, 0, Math.PI * 2); g.fill()
+    }
+    g.restore()
+  }
+  g.fillStyle = color
+  g.font = 'bold 28px Georgia, serif'
+  g.fillText(big ? '大王' : '小王', cx, H - 34)
+}
+
+/* 标准扑克点阵坐标(相对 0-1,下半区自动倒置) */
+const PIPS = {
+  1: [[0.5, 0.5]],
+  2: [[0.5, 0.22], [0.5, 0.78]],
+  3: [[0.5, 0.22], [0.5, 0.5], [0.5, 0.78]],
+  4: [[0.33, 0.22], [0.67, 0.22], [0.33, 0.78], [0.67, 0.78]],
+  5: [[0.33, 0.22], [0.67, 0.22], [0.5, 0.5], [0.33, 0.78], [0.67, 0.78]],
+  6: [[0.33, 0.22], [0.67, 0.22], [0.33, 0.5], [0.67, 0.5], [0.33, 0.78], [0.67, 0.78]],
+  7: [[0.33, 0.22], [0.67, 0.22], [0.5, 0.36], [0.33, 0.5], [0.67, 0.5], [0.33, 0.78], [0.67, 0.78]],
+  8: [[0.33, 0.22], [0.67, 0.22], [0.5, 0.36], [0.33, 0.5], [0.67, 0.5], [0.5, 0.64], [0.33, 0.78], [0.67, 0.78]],
+  9: [[0.33, 0.2], [0.67, 0.2], [0.33, 0.4], [0.67, 0.4], [0.5, 0.5], [0.33, 0.6], [0.67, 0.6], [0.33, 0.8], [0.67, 0.8]],
+  10: [[0.33, 0.2], [0.67, 0.2], [0.5, 0.3], [0.33, 0.4], [0.67, 0.4], [0.33, 0.6], [0.67, 0.6], [0.5, 0.7], [0.33, 0.8], [0.67, 0.8]],
 }
 
 function drawFace(id) {
@@ -89,18 +147,40 @@ function drawFace(id) {
   drawCorner(40, 68, false)
   drawCorner(W - 40, H - 68, true)
 
-  // 中央大花色/人物字
+  // 中央:人物牌饰框大字,A 独立大花色,数字牌标准点阵
   g.textBaseline = 'middle'
   if (rank >= 11 && rank <= 13) {
-    g.font = '900 150px Georgia, serif'
-    g.globalAlpha = 0.92
-    g.fillText(label, W / 2, H / 2 - 8)
+    // 饰框
+    roundRect(g, 62, 82, W - 124, H - 164, 14)
+    g.lineWidth = 3
+    g.strokeStyle = color
+    g.stroke()
+    roundRect(g, 70, 90, W - 140, H - 180, 10)
+    g.lineWidth = 1.5
+    g.globalAlpha = 0.5
+    g.stroke()
     g.globalAlpha = 1
-    g.font = '54px serif'
-    g.fillText(suit, W / 2, H / 2 + 86)
-  } else {
-    g.font = `${rank === 14 ? 170 : 150}px serif`
+    g.font = '900 128px Georgia, serif'
+    g.fillText(label, W / 2, H / 2 - 16)
+    g.font = '58px serif'
+    g.fillText(suit, W / 2, H / 2 + 74)
+  } else if (rank === 14) {
+    g.font = '190px serif'
+    g.shadowColor = SUIT_RED[id % 4] ? 'rgba(226, 59, 78, 0.35)' : 'rgba(35, 42, 77, 0.35)'
+    g.shadowBlur = 22
     g.fillText(suit, W / 2, H / 2 + 4)
+    g.shadowBlur = 0
+  } else {
+    const count = rank === 15 ? 2 : rank
+    const pips = PIPS[count]
+    g.font = '58px serif'
+    for (const [px, py] of pips) {
+      g.save()
+      g.translate(px * W, py * H)
+      if (py > 0.5) g.rotate(Math.PI)
+      g.fillText(suit, 0, 4)
+      g.restore()
+    }
   }
   return c
 }

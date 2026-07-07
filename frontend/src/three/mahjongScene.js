@@ -8,20 +8,52 @@ const TH = 1.28
 const TD = 0.5
 
 function feltTexture() {
+  const S = 1024
   const c = document.createElement('canvas')
-  c.width = c.height = 512
+  c.width = c.height = S
   const g = c.getContext('2d')
-  const grad = g.createRadialGradient(256, 256, 40, 256, 256, 360)
-  grad.addColorStop(0, '#1c5b40')
-  grad.addColorStop(0.7, '#124233')
-  grad.addColorStop(1, '#0a2e24')
+  const grad = g.createRadialGradient(S / 2, S / 2, 80, S / 2, S / 2, S * 0.72)
+  grad.addColorStop(0, '#1e6247')
+  grad.addColorStop(0.6, '#134736')
+  grad.addColorStop(1, '#092c22')
   g.fillStyle = grad
-  g.fillRect(0, 0, 512, 512)
+  g.fillRect(0, 0, S, S)
+  // 绒布纤维噪点
+  for (let i = 0; i < 2600; i++) {
+    g.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.02})`
+    g.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5)
+  }
+  // 金色双线牌区框 + 四角回纹点缀
+  g.strokeStyle = 'rgba(245, 193, 69, 0.28)'
+  g.lineWidth = 4
+  g.strokeRect(180, 180, S - 360, S - 360)
   g.strokeStyle = 'rgba(245, 193, 69, 0.12)'
+  g.lineWidth = 2
+  g.strokeRect(196, 196, S - 392, S - 392)
+  g.strokeStyle = 'rgba(245, 193, 69, 0.35)'
   g.lineWidth = 3
-  g.strokeRect(96, 96, 320, 320)
+  for (const [x, y, dx, dy] of [[180, 180, 1, 1], [S - 180, 180, -1, 1], [180, S - 180, 1, -1], [S - 180, S - 180, -1, -1]]) {
+    g.beginPath()
+    g.moveTo(x + dx * 46, y)
+    g.lineTo(x + dx * 46, y + dy * 16)
+    g.lineTo(x + dx * 16, y + dy * 16)
+    g.lineTo(x + dx * 16, y + dy * 46)
+    g.lineTo(x, y + dy * 46)
+    g.stroke()
+  }
+  // 中央徽记:同心环 + 菱形
+  g.strokeStyle = 'rgba(245, 193, 69, 0.10)'
+  g.lineWidth = 3
+  g.beginPath(); g.arc(S / 2, S / 2, 130, 0, Math.PI * 2); g.stroke()
+  g.beginPath(); g.arc(S / 2, S / 2, 112, 0, Math.PI * 2); g.stroke()
+  g.save()
+  g.translate(S / 2, S / 2)
+  g.rotate(Math.PI / 4)
+  g.strokeRect(-64, -64, 128, 128)
+  g.restore()
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
   return tex
 }
 
@@ -72,8 +104,10 @@ export class MahjongScene {
 
     this.handGroup = new THREE.Group()
     this.riverGroup = new THREE.Group()
+    this.oppoGroup = new THREE.Group()
     this.fxGroup = new THREE.Group()
-    this.scene.add(this.handGroup, this.riverGroup, this.fxGroup)
+    this.scene.add(this.handGroup, this.riverGroup, this.oppoGroup, this.fxGroup)
+    this._oppoCounts = null
 
     this.handMeshes = new Map()
     this.hand = []
@@ -88,26 +122,39 @@ export class MahjongScene {
   }
 
   _buildTable() {
+    // 胡桃木包边:立体挤出,比平面金圈更有实木牌桌质感
     const rim = new THREE.Mesh(
-      new THREE.ShapeGeometry(roundedRectShape(16.6, 13.4, 2.6), 24),
-      new THREE.MeshBasicMaterial({ color: 0xf5c145, transparent: true, opacity: 0.3 }),
+      new THREE.ExtrudeGeometry(roundedRectShape(17.4, 14.2, 3.0), {
+        depth: 0.55, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.12, bevelSegments: 2, curveSegments: 24,
+      }),
+      new THREE.MeshStandardMaterial({ color: 0x5d3f22, roughness: 0.55, metalness: 0.08 }),
     )
     rim.rotation.x = -Math.PI / 2
-    rim.position.y = -0.03
+    rim.position.y = -0.62
+    // 包边上的金色装饰线
+    const trim = new THREE.Mesh(
+      new THREE.ShapeGeometry(roundedRectShape(16.7, 13.5, 2.7), 24),
+      new THREE.MeshStandardMaterial({ color: 0xc89b3c, roughness: 0.35, metalness: 0.7 }),
+    )
+    trim.rotation.x = -Math.PI / 2
+    trim.position.y = -0.015
     const felt = new THREE.Mesh(
       normalizeUv(new THREE.ShapeGeometry(roundedRectShape(16.2, 13, 2.4), 24)),
       new THREE.MeshStandardMaterial({ map: feltTexture(), roughness: 0.95 }),
     )
     felt.rotation.x = -Math.PI / 2
-    this.scene.add(rim, felt)
-    this.scene.add(new THREE.HemisphereLight(0xd8ecff, 0x1a2e28, 1.25))
-    const key = new THREE.DirectionalLight(0xfff2d8, 1.6)
+    this.scene.add(rim, trim, felt)
+    this.scene.add(new THREE.HemisphereLight(0xd8ecff, 0x1a2e28, 1.1))
+    const key = new THREE.DirectionalLight(0xfff2d8, 1.7)
     key.position.set(3, 15, 5)
-    const cyan = new THREE.PointLight(0x35e0ff, 22, 28)
+    // 桌面中央暖光,牌面更润
+    const warm = new THREE.PointLight(0xffd9a0, 9, 22)
+    warm.position.set(0, 7, 1.5)
+    const cyan = new THREE.PointLight(0x35e0ff, 15, 28)
     cyan.position.set(-8, 5, -3)
-    const violet = new THREE.PointLight(0x8b7bff, 18, 28)
+    const violet = new THREE.PointLight(0x8b7bff, 12, 28)
     violet.position.set(8, 5, -3)
-    this.scene.add(key, cyan, violet)
+    this.scene.add(key, warm, cyan, violet)
   }
 
   setLowSpec(on) {
@@ -206,6 +253,35 @@ export class MahjongScene {
     })
   }
 
+  // ---------- 对手立牌:只见牌背,人数感扑面而来 ----------
+
+  /** counts = [右, 对家, 左] 各家剩余手牌数(胡牌/离场传 0) */
+  setOpponentHands(counts) {
+    const key = counts.join(',')
+    if (this._oppoCounts === key) return
+    this._oppoCounts = key
+    while (this.oppoGroup.children.length) this.oppoGroup.remove(this.oppoGroup.children[0])
+    const s = 0.82
+    const step = TW * s + 0.045
+    const conf = [
+      { pos: (i, n) => [6.5, 0.55, ((n - 1) / 2 - i) * step], rotY: -Math.PI / 2 },  // 右
+      { pos: (i, n) => [(i - (n - 1) / 2) * step, 0.55, -5.35], rotY: Math.PI },     // 对家
+      { pos: (i, n) => [-6.5, 0.55, (i - (n - 1) / 2) * step], rotY: Math.PI / 2 },  // 左
+    ]
+    counts.forEach((n, idx) => {
+      const cfg = conf[idx]
+      for (let i = 0; i < n; i++) {
+        const m = new THREE.Mesh(this.tileGeo,
+          [this.bodyMat, this.bodyMat, this.bodyMat, this.bodyMat, this.backMat, this.backMat])
+        const [x, y, z] = cfg.pos(i, n)
+        m.position.set(x, y, z)
+        m.rotation.y = cfg.rotY
+        m.scale.setScalar(s)
+        this.oppoGroup.add(m)
+      }
+    })
+  }
+
   // ---------- 牌河 ----------
 
   setRivers(discardsByRel) {
@@ -253,21 +329,68 @@ export class MahjongScene {
       new THREE.Vector3(0, 2, 5.5), new THREE.Vector3(7, 2.4, -1),
       new THREE.Vector3(0, 2.6, -5.5), new THREE.Vector3(-7, 2.4, -1),
     ][rel]
+    const to = new THREE.Vector3(
+      rel === 1 ? 3.2 : rel === 3 ? -3.2 : 0,
+      0.5,
+      rel === 0 ? 1.8 : rel === 2 ? -2.2 : 0,
+    )
     const mesh = this._tileMesh(tile)
     mesh.position.copy(from)
     mesh.rotation.x = -Math.PI / 2
     this.fxGroup.add(mesh)
+    // 抛物线飞行 + 翻转落桌
+    gsap.to(mesh.position, { x: to.x, z: to.z, duration: 0.34, ease: 'power1.in' })
     gsap.to(mesh.position, {
-      x: rel === 1 ? 3.2 : rel === 3 ? -3.2 : 0,
-      y: 0.5,
-      z: rel === 0 ? 1.8 : rel === 2 ? -2.2 : 0,
-      duration: 0.3,
-      ease: 'power2.out',
-      onComplete: () => this.fxGroup.remove(mesh),
+      y: 2.6, duration: 0.15, ease: 'power2.out', yoyo: true, repeat: 1,
+      onComplete: () => {
+        mesh.position.y = to.y
+        this._landRipple(to)
+        gsap.delayedCall(0.12, () => this.fxGroup.remove(mesh))
+      },
+    })
+    gsap.to(mesh.rotation, { z: mesh.rotation.z + Math.PI * 2, duration: 0.34, ease: 'power1.inOut' })
+  }
+
+  /** 落桌金色涟漪 */
+  _landRipple(pos) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.25, 0.4, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xf5c145, transparent: true, opacity: 0.75,
+        side: THREE.DoubleSide, depthWrite: false,
+      }),
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.position.set(pos.x, 0.05, pos.z)
+    this.fxGroup.add(ring)
+    gsap.to(ring.scale, { x: 3.2, y: 3.2, z: 3.2, duration: 0.5, ease: 'power2.out' })
+    gsap.to(ring.material, {
+      opacity: 0, duration: 0.5, ease: 'power1.out',
+      onComplete: () => { this.fxGroup.remove(ring); ring.geometry.dispose(); ring.material.dispose() },
     })
   }
 
   celebrate(win) {
+    if (win) {
+      // 金环冲击波 ×2
+      for (const delay of [0, 0.22]) {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.5, 0.85, 48),
+          new THREE.MeshBasicMaterial({
+            color: delay ? 0x35e0ff : 0xf5c145, transparent: true, opacity: 0.85,
+            side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+          }),
+        )
+        ring.rotation.x = -Math.PI / 2
+        ring.position.y = 0.4
+        this.fxGroup.add(ring)
+        gsap.to(ring.scale, { x: 11, y: 11, z: 11, duration: 1.1, delay, ease: 'power2.out' })
+        gsap.to(ring.material, {
+          opacity: 0, duration: 1.1, delay, ease: 'power1.out',
+          onComplete: () => { this.fxGroup.remove(ring); ring.geometry.dispose(); ring.material.dispose() },
+        })
+      }
+    }
     const N = win ? 220 : 50
     const geo = new THREE.BufferGeometry()
     const pos = new Float32Array(N * 3)
@@ -320,6 +443,8 @@ export class MahjongScene {
   reset() {
     this.setMyHand([], null, null)
     this.setRivers([[], [], [], []])
+    this._oppoCounts = null
+    while (this.oppoGroup.children.length) this.oppoGroup.remove(this.oppoGroup.children[0])
   }
 
   dispose() {

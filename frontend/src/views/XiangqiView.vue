@@ -122,6 +122,7 @@ function handleEvent(e) {
       break
     case 'xqmove':
       scene.animateMove(e.from, e.to)
+      if (e.captured) scene.captureBurst(e.to)
       sfx.play()
       if (e.check) game.toast('⚔️ 将军!')
       break

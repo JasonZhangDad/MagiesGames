@@ -88,6 +88,15 @@ function syncFromState(st) {
     if (s) rivers[relOf(i)] = s.discards || []
   })
   scene.setRivers(rivers)
+  // 三家对手立牌(只见牌背);胡牌或未开局不显示
+  const oppo = [0, 0, 0]
+  if (st.phase === 'playing') {
+    st.seats?.forEach((s, i) => {
+      const rel = relOf(i)
+      if (rel > 0 && s && !s.hu) oppo[rel - 1] = s.cards_left || 0
+    })
+  }
+  scene.setOpponentHands(oppo)
   if (st.phase === 'settled' && st.result && !settle.value) {
     settle.value = st.result
     showSettle.value = true

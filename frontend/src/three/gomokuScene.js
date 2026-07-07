@@ -41,6 +41,13 @@ function boardTexture() {
   for (const [x, y] of [[3, 3], [11, 3], [3, 11], [11, 11], [7, 7]]) {
     g.beginPath(); g.arc(m + x * step, m + y * step, 7, 0, Math.PI * 2); g.fill()
   }
+  // 清漆光泽 + 四周暗角,更像上过蜡的实木
+  const sheen = g.createRadialGradient(360, 300, 60, 512, 512, 900)
+  sheen.addColorStop(0, 'rgba(255,255,255,0.10)')
+  sheen.addColorStop(0.4, 'rgba(255,255,255,0)')
+  sheen.addColorStop(1, 'rgba(30,18,4,0.22)')
+  g.fillStyle = sheen
+  g.fillRect(0, 0, 1024, 1024)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
@@ -74,8 +81,13 @@ export class GomokuScene {
     this.scene.add(key, cyan, violet)
 
     this.stoneGeo = new THREE.SphereGeometry(S * 0.44, 26, 18)
-    this.blackMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.25, metalness: 0.35 })
-    this.whiteMat = new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.3, metalness: 0.05 })
+    // 清漆材质:云子般的温润光泽
+    this.blackMat = new THREE.MeshPhysicalMaterial({
+      color: 0x181b23, roughness: 0.32, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.18,
+    })
+    this.whiteMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf4f0e4, roughness: 0.38, metalness: 0.02, clearcoat: 0.8, clearcoatRoughness: 0.25,
+    })
     this.stoneGroup = new THREE.Group()
     this.fxGroup = new THREE.Group()
     this.scene.add(this.stoneGroup, this.fxGroup)
@@ -105,6 +117,8 @@ export class GomokuScene {
     )
     ring.rotation.x = -Math.PI / 2
     ring.visible = false
+    // 呼吸脉冲,最后一手一眼可见
+    gsap.to(ring.material, { opacity: 0.45, duration: 0.9, yoyo: true, repeat: -1, ease: 'sine.inOut' })
     return ring
   }
 
