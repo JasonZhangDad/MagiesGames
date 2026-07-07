@@ -9,6 +9,47 @@ from app.game.patterns import beats, detect
 from conftest import cards_of
 
 
+# ---------- 报单防守 ----------
+
+class _FakeLead:
+    """构造一个'轮到我领出'的局面桩,只带 choose_action 用到的字段。"""
+
+    def __init__(self, hands, roles):
+        self.hands = hands
+        self._roles = roles
+        self.last_pattern = None
+        self.last_seat = None
+
+    def is_leading(self):
+        return True
+
+    def role_of(self, seat):
+        return self._roles[seat]
+
+
+def test_lead_biggest_single_when_enemy_has_one_card():
+    """敌方报单且手里全是单张:领最大单,不送小单。"""
+    # 地主手牌:3、8、K 三张单;农民 seat1 只剩 1 张
+    m = _FakeLead(
+        hands={0: [0, 20, 40], 1: [47], 2: [8, 12, 16, 24]},
+        roles={0: "landlord", 1: "farmer", 2: "farmer"},
+    )
+    action, cards = choose_action(m, 0)
+    assert action == "play"
+    assert cards == [40]  # K,而不是最小的 3
+
+
+def test_lead_small_single_when_teammate_has_one_card():
+    """队友报单(敌方没报单):照常送小单让队友跑。"""
+    m = _FakeLead(
+        hands={0: [8, 12, 16, 24, 28], 1: [47], 2: [0, 20, 40]},
+        roles={0: "landlord", 1: "farmer", 2: "farmer"},
+    )
+    action, cards = choose_action(m, 2)  # seat2 农民,队友 seat1 报单
+    assert action == "play"
+    assert cards == [0]  # 最小单 3
+
+
 # ---------- 跟牌候选合法性 ----------
 
 def test_gen_beats_all_legal():

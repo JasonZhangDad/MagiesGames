@@ -1,7 +1,8 @@
-"""五子棋 AI:单层局面评估——对每个候选点评"进攻分+防守分",取最高。
+"""五子棋 AI:单层筛选 + 前 8 候选二层展开(看对手最佳回应再定)。
 
 评分依据经典模式表:五连 > 活四 > 冲四 > 活三 > 眠三 > 活二。
-自己成五直接赢;对手下一手能成五必须堵。强度定位:陪练级,快而不卡局。
+自己成五直接赢;对手下一手能成五必须堵;
+其余局面对头部候选做一步对手推演,避免"贪一手送一手"。
 """
 from .engine import DIRS, SIZE
 
@@ -48,16 +49,41 @@ def _candidates(board) -> list[tuple[int, int]]:
     return list(cand)
 
 
+def _best_reply(board, who: int) -> int:
+    """对方走一手能拿到的最高进攻分(用于二层展开)。"""
+    best = 0
+    for x, y in _candidates(board):
+        a = _line_score(board, x, y, who)
+        if a >= 10_000_000:
+            return a
+        if a > best:
+            best = a
+    return best
+
+
 def choose_move(match, seat: int) -> tuple[int, int]:
     board = match.board
     opp = 1 - seat
-    best, best_score = None, -1
+    scored = []
+    must_block, block_at = 0, None
     for x, y in _candidates(board):
         attack = _line_score(board, x, y, seat)
-        defend = _line_score(board, x, y, opp)
         if attack >= 10_000_000:  # 直接成五
             return x, y
-        score = attack + defend * 0.9 + match.rng.random()  # 微扰打破平手
+        defend = _line_score(board, x, y, opp)
+        if defend >= 10_000_000 and defend > must_block:  # 对手下一手成五,必堵
+            must_block, block_at = defend, (x, y)
+        scored.append((attack + defend * 0.9, x, y, attack))
+    if block_at:
+        return block_at
+    # 二层展开:前 8 名候选,落子后看对手最佳回应,惩罚"给对手留大招"的选点
+    scored.sort(reverse=True)
+    best, best_score = None, float("-inf")
+    for base, x, y, attack in scored[:8]:
+        board[y][x] = seat
+        reply = 0 if attack >= 1_000_000 else _best_reply(board, opp)  # 活四已必胜,无需推演
+        board[y][x] = -1
+        score = base - reply * 0.55 + match.rng.random()  # 微扰打破平手
         if score > best_score:
             best, best_score = (x, y), score
     return best

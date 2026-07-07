@@ -97,6 +97,45 @@ def test_ai_blocks_opponent_four():
     assert (x, y) in ((2, 7), (7, 7))
 
 
+def test_ai_beats_greedy_baseline():
+    """二层展开 vs 单层贪心:双色对抗 8 局,新 AI 必须净胜。"""
+    import random as _random
+
+    from app.game.gomoku.ai import SCORE, _candidates, _line_score, choose_move
+
+    def greedy_move(m, seat):
+        # 旧版单层贪心(基线):攻分 + 0.9×守分
+        board = m.board
+        opp = 1 - seat
+        best, best_score = None, -1
+        for x, y in _candidates(board):
+            attack = _line_score(board, x, y, seat)
+            if attack >= SCORE[(5, 2)]:
+                return x, y
+            score = attack + _line_score(board, x, y, opp) * 0.9 + m.rng.random()
+            if score > best_score:
+                best, best_score = (x, y), score
+        return best
+
+    new_wins = old_wins = 0
+    for seed in range(4):
+        for new_first in (True, False):
+            m = GomokuMatch(first=0, rng=_random.Random(seed))
+            new_seat = 0 if new_first else 1
+            for _ in range(SIZE * SIZE):
+                seat = m.current
+                mv = choose_move(m, seat) if seat == new_seat else greedy_move(m, seat)
+                m.place(seat, *mv)
+                if m.phase == "settled":
+                    break
+            w = m.result["winner_seat"]
+            if w == new_seat:
+                new_wins += 1
+            elif w is not None:
+                old_wins += 1
+    assert new_wins > old_wins, f"新 AI {new_wins} 胜 / 旧 AI {old_wins} 胜"
+
+
 @pytest.mark.parametrize("seed", range(60))
 def test_full_ai_game_terminates(seed):
     from app.game.gomoku.ai import choose_move

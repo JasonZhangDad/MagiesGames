@@ -156,11 +156,16 @@ def choose_action(match, seat: int) -> tuple[str, list[int] | None]:
         if whole:  # 一手出完直接赢
             return "play", list(hand)
         cands = gen_leads(hand)
+        my_role = match.role_of(seat)
+        enemy_min = min((len(match.hands[s]) for s in range(3)
+                         if match.role_of(s) != my_role), default=99)
         def lead_score(mv: list[int]) -> float:
             p = detect(mv)
             s = len(mv) * 100 - p.key * 3 - _break_penalty(mv, g)
             if p.key >= 15 and len(hand) > 6:
                 s -= 800  # 大牌留后面
+            if enemy_min == 1 and p.kind == "single":
+                s += p.key * 8 - 120  # 敌方报单:小单等于送牌,单牌越大越好
             return s
         return "play", max(cands, key=lead_score)
 

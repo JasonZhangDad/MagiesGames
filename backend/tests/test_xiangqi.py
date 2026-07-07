@@ -162,6 +162,16 @@ def test_ai_takes_free_rook():
     assert m.board[5][0] == (0, "r") or m.result
 
 
+def test_ai_advances_protected_pawn():
+    """兑子净值:有车保护的过河兵不是悬子,AI 应敢于挺进。"""
+    from app.game.xiangqi.ai import choose_move
+    # 红兵 (4,4) 挺到 (4,5) 过河;黑车 (0,5) 可吃,但红车 (4,1) 直线保护(吃兵即丢车)
+    m = empty_with([(4, 0, 0, "k"), (3, 9, 1, "k"),
+                    (4, 4, 0, "p"), (4, 1, 0, "r"), (0, 5, 1, "r")], turn_side=0)
+    frm, to = choose_move(m, 0)
+    assert (frm, to) == ((4, 4), (4, 5))
+
+
 def test_ai_escapes_check():
     from app.game.xiangqi.ai import choose_move
     m = empty_with(KINGS + [(4, 5, 1, "r"), (0, 3, 0, "r")], turn_side=0)
