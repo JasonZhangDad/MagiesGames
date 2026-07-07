@@ -1,5 +1,17 @@
 'use strict';
 // 入口：菜单、游戏循环、模块串联。
+
+// touch-action:none / user-scalable=no 在部分移动浏览器（含 Safari）里仍无法
+// 完全阻止双击缩放手势，快速连续点按虚拟按键会意外触发页面放大。
+(function preventMobileDoubleTapZoom() {
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 350) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+})();
 const Game = {
   joined: false,
   myName: '',
