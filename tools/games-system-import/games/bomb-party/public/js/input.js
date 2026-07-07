@@ -76,14 +76,32 @@ window.GameInput = (function () {
     const joy = document.getElementById('joystick');
     const knob = document.getElementById('joystick-knob');
     const bombBtn = document.getElementById('bomb-btn');
+    let touchEnabled = false;
     let joyTouch = null;
     let joyOrigin = null;
 
-    window.addEventListener('touchstart', function once() {
+    function shouldUseTouchControls() {
+      return (navigator.maxTouchPoints || 0) > 0
+        || ('ontouchstart' in window)
+        || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+        || window.innerWidth <= 820;
+    }
+
+    function enableTouchControls() {
+      if (touchEnabled) return;
       touchUI.classList.remove('hidden');
       document.body.classList.add('touch'); // 供 CSS 区分触屏布局
-      window.removeEventListener('touchstart', once);
+      touchEnabled = true;
+    }
+
+    if (shouldUseTouchControls()) enableTouchControls();
+    window.addEventListener('touchstart', enableTouchControls, { passive: true });
+    window.addEventListener('pointerdown', (ev) => {
+      if (ev.pointerType === 'touch') enableTouchControls();
     }, { passive: true });
+    window.addEventListener('resize', () => {
+      if (shouldUseTouchControls()) enableTouchControls();
+    });
 
     function joyDir(dx, dy) {
       const dead = 14;

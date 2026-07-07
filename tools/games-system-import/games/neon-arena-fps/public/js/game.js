@@ -13,7 +13,9 @@
     const f = qs.get('touch');
     if (f === '1') return true;
     if (f === '0') return false;
-    return matchMedia('(pointer: coarse)').matches;
+    return matchMedia('(pointer: coarse)').matches
+      || (navigator.maxTouchPoints || 0) > 0
+      || innerWidth <= 820;
   })();
   document.body.classList.toggle('mobile', TOUCH);
   // 画质仅影响阴影分辨率/抗锯齿/像素比这类纯观感开销，绝不缩短视距/雾距——

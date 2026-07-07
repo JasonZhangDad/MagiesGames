@@ -9,6 +9,7 @@ const Input = (() => {
   let chatFocusFn = null;
   let hornFn = null;
   let boardsFn = null;
+  let touchBound = false;
 
   const KEYMAP = {
     KeyW: 'up', ArrowUp: 'up',
@@ -57,14 +58,25 @@ const Input = (() => {
     Net.send({ type: 'input', up: keys.up, down: keys.down, left: keys.left, right: keys.right, boost: keys.boost });
   }
 
+  function shouldUseTouchControls() {
+    return (navigator.maxTouchPoints || 0) > 0
+      || ('ontouchstart' in window)
+      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || window.innerWidth <= 820;
+  }
+
   function setupTouch() {
     const ui = document.getElementById('touch-ui');
     const stick = document.getElementById('joystick');
     const knob = document.getElementById('joystick-knob');
     const bBoost = document.getElementById('btn-boost');
     const bHorn = document.getElementById('btn-horn');
-    if (!('ontouchstart' in window)) return;
+    if (!ui || !stick || !knob || !bBoost || !bHorn) return;
+    if (!shouldUseTouchControls()) return;
     ui.classList.remove('hidden');
+    document.body.classList.add('touch');
+    if (touchBound) return;
+    touchBound = true;
 
     let joyTouch = -1;
     const R = 65;

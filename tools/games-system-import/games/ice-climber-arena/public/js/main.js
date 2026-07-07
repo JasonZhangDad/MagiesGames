@@ -62,7 +62,8 @@ let renderer = null;
 // factor.  Result: pixel-accurate, never stretched, at any size or DPR.
 const VIEW_W = 1600, VIEW_H = 900, VIEW_AR = VIEW_W / VIEW_H;
 const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches
-  || (navigator.maxTouchPoints || 0) > 0;
+  || (navigator.maxTouchPoints || 0) > 0
+  || window.innerWidth <= 820;
 
 function fitViewport() {
   const game = $('game');
